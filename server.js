@@ -3,6 +3,7 @@ const { google } = require('googleapis');
 const cors = require('cors');
 const path = require('path');
 const PDFDocument = require('pdfkit');
+const fs = require('fs');
 const { PassThrough } = require('stream');
 
 const app = express();
@@ -12,15 +13,23 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+// Serve generated PDFs
+app.use('/reports', express.static(path.join(__dirname, 'reports')));
+
+// Create reports directory if it doesn't exist
+if (!fs.existsSync(path.join(__dirname, 'reports'))) {
+  fs.mkdirSync(path.join(__dirname, 'reports'));
+}
+
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
-const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID || '11DFsjOzmpev0_6qQY82EqzIYFpCiC4UP';
 const SHEET_NAME = 'Assessments';
+const BASE_URL = process.env.BASE_URL || 'https://broken-english-assessment.onrender.com';
 
 const HEADERS = [
   'Timestamp', 'Student Name', 'Phone/ID', 'Trainer', 'Date', 'Background',
   'CEFR Level', 'Fluency', 'Grammar', 'Vocabulary', 'Pronunciation',
   'Confidence', 'Comprehension', 'Coherence', 'Overall Avg',
-  'Filler Words', 'Strengths', 'Areas to Improve', 'Recommended Course', 'Report (Drive Link)'
+  'Filler Words', 'Strengths', 'Areas to Improve', 'Recommended Course', 'Report Link'
 ];
 
 const SCORE_LABELS = ['Fluency','Grammar','Vocabulary','Pronunciation','Confidence','Comprehension','Coherence'];
@@ -33,22 +42,11 @@ function getAuthClient() {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
   return new google.auth.GoogleAuth({
     credentials,
-    scopes: [
-      'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/drive',
-    ],
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 }
 
-// ── hex to RGB ────────────────────────────────────────────────────────────
-function hexToRgb(hex) {
-  const r = parseInt(hex.slice(1,3),16);
-  const g = parseInt(hex.slice(3,5),16);
-  const b = parseInt(hex.slice(5,7),16);
-  return [r,g,b];
-}
-
-// ── Generate PDF with PDFKit ──────────────────────────────────────────────
+// ── Generate PDF ──────────────────────────────────────────────────────────
 function generatePDF(d, scores, avg) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
@@ -57,37 +55,27 @@ function generatePDF(d, scores, avg) {
     doc.on('end', () => resolve(Buffer.concat(buffers)));
     doc.on('error', reject);
 
-    const W = 515; // usable width
+    const W = 515;
     const cefrColor = CEFR_COLORS[d.cefr] || '#888888';
     const avgColor = avg >= 8 ? '#4CAF50' : avg >= 5 ? '#333333' : '#E24B4A';
     const date = new Date().toLocaleDateString('en-IN', {day:'numeric',month:'long',year:'numeric'});
 
-    // ── HEADER ──
     doc.rect(40, 40, W, 60).fill('#111111');
     doc.fontSize(22).fillColor('#ffffff').font('Helvetica-Bold')
        .text('BROKEN', 52, 52, {continued:true})
        .fillColor('#FF4D00').text('  ENGLISH');
     doc.fontSize(9).fillColor('#aaaaaa').font('Helvetica')
        .text('Student Assessment Report', 52, 78);
-
-    // Date top right
     doc.fontSize(9).fillColor('#aaaaaa').font('Helvetica')
        .text(date, 300, 60, {width:255, align:'right'})
        .text('Confidential', 300, 74, {width:255, align:'right'});
 
-    doc.moveDown(0.5);
-
-    // ── STUDENT CARD ──
     let y = 115;
     doc.rect(40, y, W, 80).fill('#f9f9f9').stroke('#eeeeee');
-
-    // Avatar circle
     doc.circle(80, y+40, 24).fill('#FFE8E0');
     const initials = (d.studentName||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
     doc.fontSize(14).fillColor('#FF4D00').font('Helvetica-Bold')
        .text(initials, 56, y+28, {width:48, align:'center'});
-
-    // Student info
     doc.fontSize(14).fillColor('#111111').font('Helvetica-Bold')
        .text(d.studentName||'', 116, y+10);
     doc.fontSize(10).fillColor('#888888').font('Helvetica')
@@ -97,11 +85,9 @@ function generatePDF(d, scores, avg) {
     doc.fontSize(10).fillColor('#333333').font('Helvetica-Bold')
        .text(d.course||'', 116, y+57);
 
-    // CEFR + avg (right side)
     if (d.cefr) {
-      const [cr,cg,cb] = hexToRgb(cefrColor);
-      doc.roundedRect(420, y+8, 50, 26, 13).fill(`rgba(${cr},${cg},${cb},0.15)`);
-      doc.fontSize(14).fillColor(cefrColor).font('Helvetica-Bold')
+      doc.roundedRect(420, y+8, 50, 26, 13).fill(cefrColor);
+      doc.fontSize(14).fillColor('#ffffff').font('Helvetica-Bold')
          .text(d.cefr, 420, y+13, {width:50, align:'center'});
       doc.fontSize(8).fillColor('#aaaaaa').font('Helvetica')
          .text('CEFR level', 415, y+38, {width:60, align:'center'});
@@ -114,7 +100,6 @@ function generatePDF(d, scores, avg) {
 
     y += 96;
 
-    // ── SCORE BREAKDOWN ──
     doc.rect(40, y, W, 14).fill('#f0f0f0');
     doc.fontSize(8).fillColor('#999999').font('Helvetica-Bold')
        .text('SCORE BREAKDOWN', 52, y+3, {characterSpacing:1.5});
@@ -123,13 +108,13 @@ function generatePDF(d, scores, avg) {
     SCORE_KEYS.forEach((k, i) => {
       const val = scores[k] || 0;
       const barW = Math.round((val / 10) * 300);
-      const [br,bg,bb] = hexToRgb(BAR_COLORS[i]);
-
       doc.fontSize(11).fillColor('#444444').font('Helvetica')
          .text(SCORE_LABELS[i], 52, y+2, {width:110});
       doc.rect(170, y+4, 300, 8).fill('#eeeeee');
       if (barW > 0) doc.rect(170, y+4, barW, 8).fill(BAR_COLORS[i]);
-      let numColor = '#333333'; if(val>=8) numColor='#4CAF50'; else if(val<5) numColor='#E24B4A';
+      let numColor = '#333333';
+      if (val >= 8) numColor = '#4CAF50';
+      else if (val < 5) numColor = '#E24B4A';
       doc.fontSize(11).fillColor(numColor).font('Helvetica-Bold')
          .text(`${val}`, 478, y+2, {width:30, align:'right'});
       y += 22;
@@ -137,7 +122,6 @@ function generatePDF(d, scores, avg) {
 
     y += 8;
 
-    // ── FILLER WORDS ──
     if ((d.fillers||[]).length > 0) {
       doc.rect(40, y, W, 14).fill('#f0f0f0');
       doc.fontSize(8).fillColor('#999999').font('Helvetica-Bold')
@@ -154,13 +138,11 @@ function generatePDF(d, scores, avg) {
       y += 28;
     }
 
-    // ── TRAINER NOTES ──
     if (d.strengths || d.weaknesses) {
       doc.rect(40, y, W, 14).fill('#f0f0f0');
       doc.fontSize(8).fillColor('#999999').font('Helvetica-Bold')
          .text('TRAINER NOTES', 52, y+3, {characterSpacing:1.5});
       y += 20;
-
       if (d.strengths) {
         doc.fontSize(10).fillColor('#4CAF50').font('Helvetica-Bold').text('Strengths', 52, y);
         y += 16;
@@ -181,58 +163,12 @@ function generatePDF(d, scores, avg) {
       }
     }
 
-    // ── FOOTER ──
     doc.rect(40, 780, W, 1).fill('#eeeeee');
     doc.fontSize(9).fillColor('#bbbbbb').font('Helvetica')
        .text('Broken English — Kochi · brokenenglish.in', 40, 788, {width:W, align:'center'});
 
     doc.end();
   });
-}
-
-// ── Upload PDF to Drive ───────────────────────────────────────────────────
-async function uploadPDFToDrive(auth, fileName, pdfBuffer) {
-  const drive = google.drive({ version: 'v3', auth });
-  const pt = new PassThrough();
-  pt.end(pdfBuffer);
-
-  // Upload file (no parent folder — service account's own Drive)
-  const res = await drive.files.create({
-    requestBody: {
-      name: fileName + '.pdf',
-      mimeType: 'application/pdf',
-    },
-    media: { mimeType: 'application/pdf', body: pt },
-    fields: 'id, webViewLink',
-  });
-
-  const fileId = res.data.id;
-
-  // Share with the owner email so it appears in their Drive
-  const ownerEmail = process.env.DRIVE_OWNER_EMAIL;
-  if (ownerEmail) {
-    await drive.permissions.create({
-      fileId,
-      requestBody: {
-        role: 'writer',
-        type: 'user',
-        emailAddress: ownerEmail,
-      },
-      transferOwnership: false,
-      sendNotificationEmail: false,
-    });
-  }
-
-  // Also make it accessible to anyone with the link
-  await drive.permissions.create({
-    fileId,
-    requestBody: {
-      role: 'reader',
-      type: 'anyone',
-    },
-  });
-
-  return res.data;
 }
 
 // ── Ensure sheet headers ──────────────────────────────────────────────────
@@ -265,6 +201,7 @@ async function ensureHeaders(sheets) {
 app.post('/api/submit', async (req, res) => {
   const d = req.body;
   if (!SHEET_ID) return res.status(500).json({ error: 'GOOGLE_SHEET_ID not configured' });
+
   try {
     const auth = getAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });
@@ -274,28 +211,32 @@ app.post('/api/submit', async (req, res) => {
     const vals = SCORE_KEYS.map(k => scores[k] || 0).filter(v => v > 0);
     const avg = Math.round(vals.reduce((a,b) => a+b, 0) / vals.length);
 
-    const safeName = (d.studentName || 'Student').replace(/[^a-zA-Z0-9 ]/g, '').trim();
-    const fileName = `${safeName} — Assessment ${d.date || new Date().toISOString().slice(0,10)}`;
-    let driveLink = '';
+    // Generate PDF and save to /reports folder
+    const safeName = (d.studentName || 'Student').replace(/[^a-zA-Z0-9]/g, '_').trim();
+    const timestamp = Date.now();
+    const fileName = `${safeName}_${timestamp}.pdf`;
+    const filePath = path.join(__dirname, 'reports', fileName);
+    const reportLink = `${BASE_URL}/reports/${fileName}`;
 
+    let savedLink = '';
     try {
       console.log('Generating PDF...');
       const pdfBuffer = await generatePDF(d, scores, avg);
-      console.log(`PDF generated: ${pdfBuffer.length} bytes`);
-      const driveFile = await uploadPDFToDrive(auth, fileName, pdfBuffer);
-      driveLink = driveFile.webViewLink || '';
-      console.log(`PDF uploaded to Drive: ${fileName}.pdf`);
+      fs.writeFileSync(filePath, pdfBuffer);
+      savedLink = reportLink;
+      console.log(`PDF saved: ${fileName} → ${reportLink}`);
     } catch (pdfErr) {
-      console.error('PDF/Drive error:', pdfErr.message);
+      console.error('PDF error:', pdfErr.message);
     }
 
+    // Save to Sheets
     const row = [
       new Date().toISOString(), d.studentName||'', d.phone||'', d.trainer||'',
       d.date||'', d.background||'', d.cefr||'',
       scores.fluency||'', scores.grammar||'', scores.vocabulary||'',
       scores.pronunciation||'', scores.confidence||'', scores.listening||'',
       scores.coherence||'', avg, (d.fillers||[]).join(', '),
-      d.strengths||'', d.weaknesses||'', d.course||'', driveLink,
+      d.strengths||'', d.weaknesses||'', d.course||'', savedLink,
     ];
 
     await sheets.spreadsheets.values.append({
@@ -304,7 +245,7 @@ app.post('/api/submit', async (req, res) => {
       requestBody: { values: [row] },
     });
 
-    res.json({ success: true, avg, driveLink });
+    res.json({ success: true, avg, reportLink: savedLink });
   } catch (err) {
     console.error('Submit error:', err.message);
     res.status(500).json({ error: err.message });
