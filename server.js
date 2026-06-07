@@ -195,15 +195,43 @@ async function uploadPDFToDrive(auth, fileName, pdfBuffer) {
   const drive = google.drive({ version: 'v3', auth });
   const pt = new PassThrough();
   pt.end(pdfBuffer);
+
+  // Upload file (no parent folder — service account's own Drive)
   const res = await drive.files.create({
     requestBody: {
       name: fileName + '.pdf',
       mimeType: 'application/pdf',
-      parents: [DRIVE_FOLDER_ID],
     },
     media: { mimeType: 'application/pdf', body: pt },
     fields: 'id, webViewLink',
   });
+
+  const fileId = res.data.id;
+
+  // Share with the owner email so it appears in their Drive
+  const ownerEmail = process.env.DRIVE_OWNER_EMAIL;
+  if (ownerEmail) {
+    await drive.permissions.create({
+      fileId,
+      requestBody: {
+        role: 'writer',
+        type: 'user',
+        emailAddress: ownerEmail,
+      },
+      transferOwnership: false,
+      sendNotificationEmail: false,
+    });
+  }
+
+  // Also make it accessible to anyone with the link
+  await drive.permissions.create({
+    fileId,
+    requestBody: {
+      role: 'reader',
+      type: 'anyone',
+    },
+  });
+
   return res.data;
 }
 
