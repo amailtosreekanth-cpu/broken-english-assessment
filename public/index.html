@@ -20,10 +20,22 @@
 html{scroll-behavior:smooth;}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;}
 
+/* ── LOGO ── */
+.be-logo{display:inline-flex;flex-direction:column;line-height:0.82;text-decoration:none;cursor:default;}
+.be-logo-line{font-family:'Syne',sans-serif;font-weight:800;letter-spacing:-0.5px;color:var(--tx);display:flex;align-items:center;}
+.k-wrap{position:relative;display:inline-block;}
+.k-base{color:transparent;font-family:'Syne',sans-serif;font-weight:800;}
+.k-grad{position:absolute;inset:0;background:linear-gradient(135deg,#FF4D00 0%,#FF6B00 50%,#FFB800 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-family:'Syne',sans-serif;font-weight:800;}
+
+/* Nav size */
+nav .be-logo-line{font-size:22px;}
+nav .k-base, nav .k-grad{font-size:22px;}
+
+/* Print size */
+.print-logo-wrap .be-logo-line{font-size:28px;color:#111 !important;}
+
 /* NAV */
-nav{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:rgba(13,13,13,0.94);backdrop-filter:blur(12px);z-index:100;}
-.logo{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--tx);text-decoration:none;}
-.logo span{color:var(--accent);}
+nav{display:flex;align-items:center;justify-content:space-between;padding:14px 28px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:rgba(13,13,13,0.94);backdrop-filter:blur(12px);z-index:100;}
 .nav-tabs{display:flex;gap:4px;}
 .nav-tab{padding:7px 16px;border-radius:999px;border:1px solid var(--bd);background:transparent;color:var(--m);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;transition:all .15s;}
 .nav-tab.active,.nav-tab:hover{background:var(--s2);color:var(--tx);border-color:var(--bd2);}
@@ -41,11 +53,8 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:16px 2
 .sdot.on{background:var(--accent);}
 .sdot.done{background:var(--green);}
 
-/* SECTION */
 .sec-label{font-size:11px;letter-spacing:1.8px;text-transform:uppercase;color:var(--m);font-weight:500;margin:1.5rem 0 10px;}
 .sec-label:first-of-type{margin-top:0;}
-
-/* CARDS */
 .card{background:var(--s1);border:1px solid var(--bd);border-radius:14px;padding:20px 22px;margin-bottom:12px;}
 
 /* FORM */
@@ -124,19 +133,12 @@ input[type=range]{flex:1;height:4px;accent-color:var(--accent);}
 .sbar-fill{height:100%;border-radius:99px;transition:width .9s ease;}
 .sbar-num{font-size:12px;font-weight:600;width:30px;text-align:right;flex-shrink:0;}
 
-/* TAGS */
 .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
-.tag{font-size:11px;padding:3px 10px;border-radius:999px;
-  background:rgba(239,159,39,.12);color:var(--yellow);font-family:'JetBrains Mono',monospace;}
-
-/* OBS */
-.obs{background:var(--s2);border:1px solid var(--bd);border-radius:9px;
-  padding:12px 14px;font-size:13px;color:var(--m);line-height:1.65;margin-top:6px;}
-
-/* ACTION ROW */
+.tag{font-size:11px;padding:3px 10px;border-radius:999px;background:rgba(239,159,39,.12);color:var(--yellow);font-family:'JetBrains Mono',monospace;}
+.obs{background:var(--s2);border:1px solid var(--bd);border-radius:9px;padding:12px 14px;font-size:13px;color:var(--m);line-height:1.65;margin-top:6px;}
 .action-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:1.5rem;padding-top:1.2rem;border-top:1px solid var(--bd);}
 
-/* RECORDS PAGE */
+/* RECORDS */
 .rec-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
 .rec-title{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;}
 .rec-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px;}
@@ -155,16 +157,14 @@ tr:hover td{background:rgba(255,255,255,.02);}
 .empty-state i{font-size:40px;display:block;margin-bottom:12px;}
 
 /* TOAST */
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
-  padding:11px 20px;border-radius:10px;font-size:14px;z-index:999;
-  display:none;border:1px solid;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:11px 20px;border-radius:10px;font-size:14px;z-index:999;display:none;border:1px solid;}
 .toast.show{display:block;}
 .toast.ok{background:#0a2214;border-color:#4CAF50;color:#81c784;}
 .toast.err{background:#2a0d0d;border-color:#E24B4A;color:#ff9a9a;}
 
-/* SCREEN */
 .screen{display:none;}
 .screen.on{display:block;}
+.print-header{display:none;}
 
 @media(max-width:600px){
   nav{padding:12px 16px;}
@@ -173,28 +173,62 @@ tr:hover td{background:rgba(255,255,255,.02);}
   .cefr-grid{grid-template-columns:repeat(3,1fr);}
   .report-top{flex-direction:column;text-align:center;}
 }
+
+/* ── PRINT ── */
+@media print {
+  nav,.nav-row,.action-row,.steps-row,.nav-tabs{display:none !important;}
+  body{background:#fff !important;color:#111 !important;}
+  .page{display:block !important;padding:0 !important;max-width:100% !important;}
+  .screen{display:none !important;}
+  #s4{display:block !important;}
+  .print-header{
+    display:flex !important;align-items:center;justify-content:space-between;
+    padding-bottom:14px;margin-bottom:20px;
+    border-bottom:3px solid #FF4D00;
+  }
+  .print-header .be-logo-line{color:#111 !important;font-size:26px;}
+  .print-header .k-base{color:transparent !important;}
+  .print-date{font-size:11px;color:#888;text-align:right;line-height:1.6;}
+  .report-top{background:#fff !important;border:1px solid #ddd !important;border-radius:10px;}
+  .avatar{background:#FFE8E0 !important;color:#FF4D00 !important;}
+  .r-name{color:#111 !important;}
+  .r-meta{color:#666 !important;}
+  .chart-card{background:#fff !important;border:1px solid #ddd !important;border-radius:10px;page-break-inside:avoid;}
+  .chart-title{color:#888 !important;}
+  .sbar-track{background:#eee !important;}
+  .sbar-lbl{color:#666 !important;}
+  .obs{background:#f5f5f5 !important;border:1px solid #ddd !important;color:#444 !important;}
+  .tag{background:#FFF3DC !important;color:#996600 !important;}
+  canvas{max-width:260px !important;max-height:260px !important;display:block;margin:0 auto;}
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
+}
 </style>
 </head>
 <body>
 
+<!-- ── LOGO MACRO (reused everywhere) ── -->
+<template id="logoTpl">
+  <div class="be-logo">
+    <div class="be-logo-line">BRO<span class="k-wrap"><span class="k-base">K</span><span class="k-grad">K</span></span>EN</div>
+    <div class="be-logo-line">ENGLISH</div>
+  </div>
+</template>
+
 <nav>
-  <a href="/" class="logo">Broken<span>English</span></a>
+  <div id="navLogo"></div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="showPage('assess')"><i class="ti ti-clipboard-check" style="font-size:15px;vertical-align:-2px;margin-right:5px"></i>Assess</button>
     <button class="nav-tab" onclick="showPage('records')"><i class="ti ti-table" style="font-size:15px;vertical-align:-2px;margin-right:5px"></i>Records</button>
   </div>
 </nav>
 
-<!-- ══════════════ ASSESS PAGE ══════════════ -->
 <div class="page active" id="pg-assess">
 
-  <!-- S1: Student Info -->
   <div class="screen on" id="s1">
     <div class="step-header">
       <div class="step-title">Student details</div>
       <div class="steps-row"><div class="sdot on" id="d0"></div><div class="sdot" id="d1"></div><div class="sdot" id="d2"></div></div>
     </div>
-
     <div class="row2">
       <div><label class="lbl">Student name *</label><input type="text" id="stName" placeholder="e.g. Rahul Menon"/></div>
       <div><label class="lbl">Phone / WhatsApp *</label><input type="text" id="stPhone" placeholder="e.g. 9876543210"/></div>
@@ -207,9 +241,8 @@ tr:hover td{background:rgba(255,255,255,.02);}
       <label class="lbl">Background / occupation</label>
       <input type="text" id="stBg" placeholder="e.g. Software engineer, 3 years exp, from Kochi"/>
     </div>
-
     <p class="sec-label">CEFR level — trainer's judgement</p>
-    <div class="cefr-grid" id="cefrGrid">
+    <div class="cefr-grid">
       <button class="cb" data-v="A1" onclick="selCefr(this)">A1<span class="cb-sub">Beginner</span></button>
       <button class="cb" data-v="A2" onclick="selCefr(this)">A2<span class="cb-sub">Elementary</span></button>
       <button class="cb" data-v="B1" onclick="selCefr(this)">B1<span class="cb-sub">Intermediate</span></button>
@@ -217,24 +250,20 @@ tr:hover td{background:rgba(255,255,255,.02);}
       <button class="cb" data-v="C1" onclick="selCefr(this)">C1<span class="cb-sub">Advanced</span></button>
       <button class="cb" data-v="C2" onclick="selCefr(this)">C2<span class="cb-sub">Mastery</span></button>
     </div>
-
     <div class="nav-row">
       <button class="btn-primary" onclick="go(2)">Next: Scores <i class="ti ti-arrow-right"></i></button>
     </div>
   </div>
 
-  <!-- S2: Scores -->
   <div class="screen" id="s2">
     <div class="step-header">
       <div class="step-title">Fluency scores</div>
       <div class="steps-row"><div class="sdot done" id="d0b"></div><div class="sdot on" id="d1b"></div><div class="sdot" id="d2b"></div></div>
     </div>
-
     <p class="sec-label">Rate each area out of 10</p>
     <div id="sliders"></div>
-
     <p class="sec-label" style="margin-top:1.5rem">Filler words observed (tap all that apply)</p>
-    <div class="filler-wrap" id="fillerWrap">
+    <div class="filler-wrap">
       <button class="fb" onclick="togF(this)">"umm"</button>
       <button class="fb" onclick="togF(this)">"uh"</button>
       <button class="fb" onclick="togF(this)">"like"</button>
@@ -250,20 +279,17 @@ tr:hover td{background:rgba(255,255,255,.02);}
       <button class="fb" onclick="togF(this)">"and all"</button>
       <button class="fb" onclick="togF(this)">"no?"</button>
     </div>
-
     <div class="nav-row">
       <button class="btn-back" onclick="go(1)"><i class="ti ti-arrow-left"></i></button>
       <button class="btn-primary" onclick="go(3)">Next: Observations <i class="ti ti-arrow-right"></i></button>
     </div>
   </div>
 
-  <!-- S3: Observations -->
   <div class="screen" id="s3">
     <div class="step-header">
       <div class="step-title">Trainer observations</div>
       <div class="steps-row"><div class="sdot done" id="d0c"></div><div class="sdot done" id="d1c"></div><div class="sdot on" id="d2c"></div></div>
     </div>
-
     <div class="row1"><label class="lbl">Key strengths</label>
       <textarea id="obsS" placeholder="e.g. Good range of vocabulary, confident tone, clear ideas..."></textarea></div>
     <div class="row1"><label class="lbl">Areas to improve</label>
@@ -278,15 +304,18 @@ tr:hover td{background:rgba(255,255,255,.02);}
         <option>Pronunciation Masterclass</option>
       </select>
     </div>
-
     <div class="nav-row">
       <button class="btn-back" onclick="go(2)"><i class="ti ti-arrow-left"></i></button>
       <button class="btn-primary green" onclick="submit()"><i class="ti ti-chart-radar"></i> Save & Generate Report</button>
     </div>
   </div>
 
-  <!-- S4: Report -->
   <div class="screen" id="s4">
+    <!-- Print only header -->
+    <div class="print-header" id="printHeader">
+      <div id="printLogo"></div>
+      <div class="print-date" id="printDate"></div>
+    </div>
     <div id="rptTop"></div>
     <div class="chart-card"><p class="chart-title">Score breakdown</p><div id="rptBars"></div></div>
     <div class="chart-card"><p class="chart-title">Radar overview</p>
@@ -295,7 +324,7 @@ tr:hover td{background:rgba(255,255,255,.02);}
     <div id="rptFillers"></div>
     <div id="rptNotes"></div>
     <div class="action-row">
-      <button class="btn-secondary" onclick="window.print()"><i class="ti ti-printer"></i> Print</button>
+      <button class="btn-secondary" onclick="printReport()"><i class="ti ti-printer"></i> Print / Save PDF</button>
       <button class="btn-secondary" onclick="copyRpt()"><i class="ti ti-copy"></i> Copy summary</button>
       <button class="btn-secondary" onclick="showPage('records')"><i class="ti ti-table"></i> View all records</button>
       <button class="btn-secondary" onclick="reset()"><i class="ti ti-refresh"></i> New assessment</button>
@@ -303,7 +332,6 @@ tr:hover td{background:rgba(255,255,255,.02);}
   </div>
 </div>
 
-<!-- ══════════════ RECORDS PAGE ══════════════ -->
 <div class="page" id="pg-records">
   <div class="rec-header">
     <div class="rec-title">All assessments</div>
@@ -316,40 +344,48 @@ tr:hover td{background:rgba(255,255,255,.02);}
 <div class="toast" id="toast"></div>
 
 <script>
-const SLIDERS_DEF = [
-  {id:'fluency',      name:'Fluency',       sub:'Overall flow & ease'},
-  {id:'grammar',      name:'Grammar',       sub:'Accuracy & tense use'},
-  {id:'vocabulary',   name:'Vocabulary',    sub:'Word range & depth'},
-  {id:'pronunciation',name:'Pronunciation', sub:'Clarity & MTI level'},
-  {id:'confidence',   name:'Confidence',    sub:'Tone & assertiveness'},
-  {id:'listening',    name:'Comprehension', sub:'Understanding questions'},
-  {id:'coherence',    name:'Coherence',     sub:'Ideas flow logically'},
+const SLIDERS_DEF=[
+  {id:'fluency',name:'Fluency',sub:'Overall flow & ease'},
+  {id:'grammar',name:'Grammar',sub:'Accuracy & tense use'},
+  {id:'vocabulary',name:'Vocabulary',sub:'Word range & depth'},
+  {id:'pronunciation',name:'Pronunciation',sub:'Clarity & MTI level'},
+  {id:'confidence',name:'Confidence',sub:'Tone & assertiveness'},
+  {id:'listening',name:'Comprehension',sub:'Understanding questions'},
+  {id:'coherence',name:'Coherence',sub:'Ideas flow logically'},
 ];
-const COLORS = ['#378ADD','#1D9E75','#7F77DD','#D85A30','#EF9F27','#D4537E','#639922'];
-const CEFR_COLORS = {A1:'#E24B4A',A2:'#EF9F27',B1:'#378ADD',B2:'#7F77DD',C1:'#1D9E75',C2:'#639922'};
-const CEFR_BG = {A1:'rgba(226,75,74,.12)',A2:'rgba(239,159,39,.12)',B1:'rgba(55,138,221,.12)',B2:'rgba(127,119,221,.12)',C1:'rgba(29,158,117,.12)',C2:'rgba(99,153,34,.12)'};
+const COLORS=['#378ADD','#1D9E75','#7F77DD','#D85A30','#EF9F27','#D4537E','#639922'];
+const CEFR_COLORS={A1:'#E24B4A',A2:'#EF9F27',B1:'#378ADD',B2:'#7F77DD',C1:'#1D9E75',C2:'#639922'};
+const CEFR_BG={A1:'rgba(226,75,74,.12)',A2:'rgba(239,159,39,.12)',B1:'rgba(55,138,221,.12)',B2:'rgba(127,119,221,.12)',C1:'rgba(29,158,117,.12)',C2:'rgba(99,153,34,.12)'};
 
-let cefrVal='', fillers=[], radarChart=null;
+let cefrVal='',fillers=[],radarChart=null;
 
-// Build sliders
+// ── INJECT LOGO ──────────────────────────────────────────────
+function makeLogo(){
+  return `<div class="be-logo">
+    <div class="be-logo-line">BRO<span class="k-wrap"><span class="k-base">K</span><span class="k-grad">K</span></span>EN</div>
+    <div class="be-logo-line">ENGLISH</div>
+  </div>`;
+}
+document.getElementById('navLogo').innerHTML = makeLogo();
+document.getElementById('printLogo').innerHTML = makeLogo();
+
 function buildSliders(){
-  document.getElementById('sliders').innerHTML = SLIDERS_DEF.map(s=>`
+  document.getElementById('sliders').innerHTML=SLIDERS_DEF.map(s=>`
     <div class="sl-card">
       <div class="sl-info"><div class="sl-name">${s.name}</div><div class="sl-sub">${s.sub}</div></div>
-      <input type="range" min="1" max="10" value="5" step="1" id="sl_${s.id}"
-        oninput="updSV('sv_${s.id}',this.value)"/>
+      <input type="range" min="1" max="10" value="5" step="1" id="sl_${s.id}" oninput="updSV('sv_${s.id}',this.value)"/>
       <span class="sl-val" id="sv_${s.id}">5</span>
     </div>`).join('');
 }
 
 function updSV(id,v){
-  const el=document.getElementById(id); el.textContent=v;
-  el.style.color = v>=8?'var(--green)':v>=5?'var(--tx)':'var(--red)';
+  const el=document.getElementById(id);el.textContent=v;
+  el.style.color=v>=8?'var(--green)':v>=5?'var(--tx)':'var(--red)';
 }
 
 function selCefr(btn){
   document.querySelectorAll('.cb').forEach(b=>b.classList.remove('sel'));
-  btn.classList.add('sel'); cefrVal=btn.dataset.v;
+  btn.classList.add('sel');cefrVal=btn.dataset.v;
 }
 
 function togF(btn){
@@ -373,25 +409,22 @@ function go(n){
     if(!document.getElementById('trName').value.trim()){toast('Please enter trainer name','err');return;}
     if(!cefrVal){toast('Please select a CEFR level','err');return;}
   }
-  if(n===3){/* scores always valid */}
   ['s1','s2','s3','s4'].forEach((id,i)=>document.getElementById(id).classList.toggle('on',i===n-1));
   window.scrollTo(0,0);
 }
 
 function getScores(){
   const s={};
-  SLIDERS_DEF.forEach(d=>{ s[d.id]=parseInt(document.getElementById('sl_'+d.id).value); });
+  SLIDERS_DEF.forEach(d=>{s[d.id]=parseInt(document.getElementById('sl_'+d.id).value);});
   return s;
 }
 
 async function submit(){
   const course=document.getElementById('recC').value;
   if(!course){toast('Please select a recommended course','err');return;}
-
   const scores=getScores();
   const vals=Object.values(scores);
   const avg=Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
-
   const payload={
     studentName:document.getElementById('stName').value.trim(),
     phone:document.getElementById('stPhone').value.trim(),
@@ -403,8 +436,6 @@ async function submit(){
     weaknesses:document.getElementById('obsW').value.trim(),
     course
   };
-
-  // Save to Sheets
   try{
     const r=await fetch('/api/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const d=await r.json();
@@ -413,7 +444,6 @@ async function submit(){
   }catch(e){
     toast('Sheets save failed: '+e.message,'err');
   }
-
   renderReport(payload,scores,avg);
   go(4);
 }
@@ -423,13 +453,13 @@ function renderReport(p,scores,avg){
   const cc=CEFR_COLORS[p.cefr]||'#888';
   const cb=CEFR_BG[p.cefr]||'rgba(136,136,136,.12)';
   const avgColor=avg>=8?'var(--green)':avg>=5?'var(--tx)':'var(--red)';
-
+  document.getElementById('printDate').innerHTML=`Student Assessment Report<br>${new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}`;
   document.getElementById('rptTop').innerHTML=`
     <div class="report-top">
       <div class="avatar">${initials}</div>
       <div style="flex:1">
         <div class="r-name">${p.studentName}</div>
-        <div class="r-meta">${p.background||''} ${p.background&&p.phone?'·':''} ${p.phone||''}</div>
+        <div class="r-meta">${p.background||''}${p.background&&p.phone?' · ':''}${p.phone||''}</div>
         <div class="r-meta" style="margin-top:3px">Trainer: ${p.trainer} · ${p.date}</div>
         <div class="r-meta" style="margin-top:6px;color:var(--tx);font-weight:500">${p.course}</div>
       </div>
@@ -439,7 +469,6 @@ function renderReport(p,scores,avg){
         <div style="font-size:11px;color:var(--h)">overall avg</div>
       </div>
     </div>`;
-
   const scoreArr=SLIDERS_DEF.map((d,i)=>({label:d.name,val:scores[d.id],color:COLORS[i]}));
   document.getElementById('rptBars').innerHTML=scoreArr.map((s,i)=>`
     <div class="sbar">
@@ -448,31 +477,28 @@ function renderReport(p,scores,avg){
       <span class="sbar-num" style="color:${s.val>=8?'var(--green)':s.val>=5?'var(--tx)':'var(--red)'}">${s.val}</span>
     </div>`).join('');
   setTimeout(()=>scoreArr.forEach((s,i)=>{const e=document.getElementById('bf'+i);if(e)e.style.width=(s.val*10)+'%';}),80);
-
   if(radarChart) radarChart.destroy();
   const ctx=document.getElementById('radarC').getContext('2d');
   radarChart=new Chart(ctx,{
     type:'radar',
-    data:{
-      labels:scoreArr.map(s=>s.label),
-      datasets:[{data:scoreArr.map(s=>s.val),backgroundColor:'rgba(255,77,0,.1)',
-        borderColor:'#FF4D00',borderWidth:2,pointBackgroundColor:'#FF4D00',pointRadius:4}]
-    },
+    data:{labels:scoreArr.map(s=>s.label),datasets:[{data:scoreArr.map(s=>s.val),
+      backgroundColor:'rgba(255,77,0,.1)',borderColor:'#FF4D00',borderWidth:2,
+      pointBackgroundColor:'#FF4D00',pointRadius:4}]},
     options:{responsive:false,scales:{r:{min:0,max:10,ticks:{display:false,stepSize:2},
-      grid:{color:'rgba(255,255,255,.06)'},angleLines:{color:'rgba(255,255,255,.06)'},
-      pointLabels:{font:{size:10},color:'rgba(255,255,255,.45)'}}},plugins:{legend:{display:false}}}
+      grid:{color:'rgba(0,0,0,.1)'},angleLines:{color:'rgba(0,0,0,.1)'},
+      pointLabels:{font:{size:10},color:'#555'}}},plugins:{legend:{display:false}}}
   });
-
-  document.getElementById('rptFillers').innerHTML = p.fillers.length ? `
+  document.getElementById('rptFillers').innerHTML=p.fillers.length?`
     <div class="chart-card"><p class="chart-title">Filler words observed</p>
-    <div class="tags">${p.fillers.map(f=>`<span class="tag">${f}</span>`).join('')}</div></div>` : '';
-
+    <div class="tags">${p.fillers.map(f=>`<span class="tag">${f}</span>`).join('')}</div></div>`:'';
   document.getElementById('rptNotes').innerHTML=`
     <div class="chart-card"><p class="chart-title">Trainer notes</p>
       ${p.strengths?`<p style="font-size:12px;color:var(--green);font-weight:500;margin-bottom:5px"><i class="ti ti-circle-check" style="font-size:13px;vertical-align:-1px;margin-right:4px"></i>Strengths</p><div class="obs">${p.strengths}</div>`:''}
       ${p.weaknesses?`<p style="font-size:12px;color:var(--red);font-weight:500;margin:12px 0 5px"><i class="ti ti-alert-circle" style="font-size:13px;vertical-align:-1px;margin-right:4px"></i>Areas to improve</p><div class="obs">${p.weaknesses}</div>`:''}
     </div>`;
 }
+
+function printReport(){setTimeout(()=>window.print(),600);}
 
 function copyRpt(){
   const n=document.getElementById('stName').value||'Student';
@@ -483,10 +509,9 @@ function copyRpt(){
     `Fillers: ${fillers.join(', ')||'None noted'}`,
     `Course: ${document.getElementById('recC').value||'—'}`,
     `Trainer: ${document.getElementById('trName').value||'—'}`].join('\n');
-  navigator.clipboard.writeText(lines).then(()=>toast('Copied to clipboard!','ok'));
+  navigator.clipboard.writeText(lines).then(()=>toast('Copied!','ok'));
 }
 
-// ── RECORDS ─────────────────────────────────────────────────────────
 async function loadRecords(){
   document.getElementById('recTable').innerHTML='<div class="empty-state"><i class="ti ti-loader"></i>Loading...</div>';
   document.getElementById('recStats').innerHTML='';
@@ -507,39 +532,28 @@ function renderRecords(rows){
   const cefrCounts={};
   rows.forEach(r=>{const c=r['CEFR Level'];if(c)cefrCounts[c]=(cefrCounts[c]||0)+1;});
   const topCefr=Object.entries(cefrCounts).sort((a,b)=>b[1]-a[1])[0];
-
   document.getElementById('recStats').innerHTML=`
     <div class="stat-card"><div class="stat-num">${total}</div><div class="stat-lbl">Total assessments</div></div>
     <div class="stat-card"><div class="stat-num" style="color:${grandAvg>=7?'var(--green)':grandAvg>=5?'var(--yellow)':'var(--red)'}">${grandAvg}/10</div><div class="stat-lbl">Average score</div></div>
     <div class="stat-card"><div class="stat-num" style="color:${CEFR_COLORS[topCefr?.[0]]||'var(--tx)'}">${topCefr?.[0]||'—'}</div><div class="stat-lbl">Most common CEFR</div></div>
     <div class="stat-card"><div class="stat-num">${rows.filter(r=>r['Recommended Course']?.includes('Elite')).length}</div><div class="stat-lbl">Elite coaching leads</div></div>`;
-
   if(!rows.length){
-    document.getElementById('recTable').innerHTML='<div class="empty-state"><i class="ti ti-clipboard-list"></i><p style="font-size:14px;margin-top:8px">No assessments yet.<br>Complete one to see it here.</p></div>';
+    document.getElementById('recTable').innerHTML='<div class="empty-state"><i class="ti ti-clipboard-list"></i><p style="font-size:14px;margin-top:8px">No assessments yet.</p></div>';
     return;
   }
-
   document.getElementById('recTable').innerHTML=`
     <div class="rec-table-wrap"><table>
-      <thead><tr>
-        <th>Student</th><th>Date</th><th>CEFR</th><th>Avg</th>
-        <th>Fluency</th><th>Grammar</th><th>Vocab</th><th>Pronunciation</th>
-        <th>Fillers</th><th>Course</th><th>Trainer</th>
-      </tr></thead>
+      <thead><tr><th>Student</th><th>Date</th><th>CEFR</th><th>Avg</th><th>Fluency</th><th>Grammar</th><th>Vocab</th><th>Pronunciation</th><th>Fillers</th><th>Course</th><th>Trainer</th></tr></thead>
       <tbody>${rows.map(r=>{
-        const avg=parseFloat(r['Overall Avg'])||0;
         const cc=CEFR_COLORS[r['CEFR Level']]||'#888';
         const cb=CEFR_BG[r['CEFR Level']]||'rgba(136,136,136,.12)';
-        const scoreChip=(v)=>{const n=parseFloat(v)||0;const c=n>=8?'var(--green)':n>=5?'var(--yellow)':'var(--red)';return`<span class="score-chip" style="color:${c};background:${c}1a">${v||'—'}</span>`;};
+        const sc=(v)=>{const n=parseFloat(v)||0;const c=n>=8?'var(--green)':n>=5?'var(--yellow)':'var(--red)';return`<span class="score-chip" style="color:${c};background:${c}1a">${v||'—'}</span>`;};
         return`<tr>
           <td><div style="font-weight:500">${r['Student Name']||'—'}</div><div style="font-size:11px;color:var(--h)">${r['Phone/ID']||''}</div></td>
           <td style="color:var(--m);font-size:12px">${r['Date']||''}</td>
           <td>${r['CEFR Level']?`<span class="cefr-tag" style="background:${cb};color:${cc}">${r['CEFR Level']}</span>`:'-'}</td>
-          <td>${scoreChip(r['Overall Avg'])}</td>
-          <td>${scoreChip(r['Fluency'])}</td>
-          <td>${scoreChip(r['Grammar'])}</td>
-          <td>${scoreChip(r['Vocabulary'])}</td>
-          <td>${scoreChip(r['Pronunciation'])}</td>
+          <td>${sc(r['Overall Avg'])}</td><td>${sc(r['Fluency'])}</td><td>${sc(r['Grammar'])}</td>
+          <td>${sc(r['Vocabulary'])}</td><td>${sc(r['Pronunciation'])}</td>
           <td style="font-size:11px;color:var(--yellow);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['Filler Words']||'—'}</td>
           <td><span class="course-tag">${(r['Recommended Course']||'—').replace(' — ',' ')}</span></td>
           <td style="font-size:12px;color:var(--m)">${r['Trainer']||'—'}</td>
@@ -549,7 +563,7 @@ function renderRecords(rows){
 }
 
 function reset(){
-  cefrVal=''; fillers=[];
+  cefrVal='';fillers=[];
   document.querySelectorAll('.cb').forEach(b=>b.classList.remove('sel'));
   document.querySelectorAll('.fb').forEach(b=>b.classList.remove('sel'));
   ['stName','stPhone','trName','stBg','obsS','obsW'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
@@ -564,11 +578,10 @@ function reset(){
 
 function toast(msg,type='ok'){
   const t=document.getElementById('toast');
-  t.textContent=msg; t.className='toast show '+type;
+  t.textContent=msg;t.className='toast show '+type;
   setTimeout(()=>t.className='toast',3000);
 }
 
-// Init
 buildSliders();
 document.getElementById('stDate').value=new Date().toISOString().slice(0,10);
 </script>
