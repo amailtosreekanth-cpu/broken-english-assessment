@@ -3,8 +3,7 @@ const { google } = require('googleapis');
 const cors = require('cors');
 const path = require('path');
 const { Readable } = require('stream');
-const puppeteer = require('puppeteer-core');
-const chromium = require('@sparticuz/chromium');
+const htmlPdf = require('html-pdf-node');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -52,47 +51,45 @@ function generateReportHTML(d, scores, avg) {
       <td style="width:130px;font-size:13px;color:#666;padding:7px 0">${SCORE_LABELS[i]}</td>
       <td style="padding:7px 10px">
         <div style="background:#eee;border-radius:99px;height:9px;overflow:hidden">
-          <div style="width:${(scores[k]||0)*10}%;height:100%;background:${COLORS[i]};border-radius:99px"></div>
+          <div style="width:${(scores[k]||0)*10}%;height:9px;background:${COLORS[i]};border-radius:99px"></div>
         </div>
       </td>
       <td style="width:36px;font-size:13px;font-weight:700;color:${(scores[k]||0)>=8?'#4CAF50':(scores[k]||0)>=5?'#333':'#E24B4A'};text-align:right;padding:7px 0">${scores[k]||0}</td>
     </tr>`).join('');
 
   const fillerTags = (d.fillers||[]).map(f =>
-    `<span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#FFF3DC;color:#996600;font-family:monospace;margin:2px 4px 2px 0">${f}</span>`
+    `<span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:99px;background:#FFF3DC;color:#996600;font-family:monospace;margin:2px 3px">${f}</span>`
   ).join('');
 
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8"/>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:'DM Sans',sans-serif;background:#fff;color:#111;padding:36px 40px;max-width:760px;margin:0 auto;}
+  body{font-family:Arial,sans-serif;background:#fff;color:#111;padding:36px 40px;}
   .header{display:flex;align-items:flex-start;justify-content:space-between;border-bottom:3px solid #FF4D00;padding-bottom:16px;margin-bottom:24px;}
-  .logo-wrap{line-height:0.85;}
-  .logo-line{font-family:'Syne',sans-serif;font-weight:800;font-size:24px;color:#111;display:block;}
+  .logo-big{font-size:26px;font-weight:900;color:#111;line-height:0.9;letter-spacing:-0.5px;}
   .logo-k{color:#FF4D00;}
   .header-right{text-align:right;font-size:11px;color:#999;line-height:1.7;}
-  .student-card{background:#fafafa;border:1px solid #eee;border-radius:12px;padding:18px 20px;display:flex;align-items:center;gap:16px;margin-bottom:14px;}
-  .avatar{width:52px;height:52px;border-radius:50%;background:#FFE8E0;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#FF4D00;flex-shrink:0;font-family:'Syne',sans-serif;}
-  .s-name{font-family:'Syne',sans-serif;font-size:17px;font-weight:800;margin-bottom:3px;}
+  .student-card{background:#fafafa;border:1px solid #eee;border-radius:10px;padding:18px 20px;display:flex;align-items:center;gap:16px;margin-bottom:14px;}
+  .avatar{width:50px;height:50px;border-radius:50%;background:#FFE8E0;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;color:#FF4D00;flex-shrink:0;}
+  .s-name{font-size:17px;font-weight:900;margin-bottom:4px;}
   .s-meta{font-size:12px;color:#888;line-height:1.6;}
-  .cefr-pill{display:inline-block;padding:3px 14px;border-radius:999px;font-size:16px;font-weight:800;font-family:'Syne',sans-serif;margin-bottom:4px;}
-  .avg-num{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;line-height:1;}
-  .card{background:#fff;border:1px solid #eee;border-radius:12px;padding:16px 20px;margin-bottom:12px;}
-  .card-title{font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:#aaa;font-weight:500;margin-bottom:12px;}
+  .cefr-pill{display:inline-block;padding:3px 14px;border-radius:99px;font-size:15px;font-weight:900;margin-bottom:4px;}
+  .avg-num{font-size:28px;font-weight:900;line-height:1;}
+  .card{background:#fff;border:1px solid #eee;border-radius:10px;padding:16px 20px;margin-bottom:12px;}
+  .card-title{font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:#aaa;font-weight:700;margin-bottom:12px;}
   .obs-box{background:#f5f5f5;border-radius:8px;padding:11px 14px;font-size:13px;color:#555;line-height:1.65;margin-top:5px;}
-  .obs-label{font-size:12px;font-weight:500;margin-top:10px;margin-bottom:4px;}
+  .obs-label{font-size:12px;font-weight:700;margin-top:10px;margin-bottom:4px;}
   .footer{margin-top:28px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#bbb;text-align:center;}
 </style>
 </head>
 <body>
   <div class="header">
-    <div class="logo-wrap">
-      <span class="logo-line">BRO<span class="logo-k">K</span>EN</span>
-      <span class="logo-line">ENGLISH</span>
+    <div>
+      <div class="logo-big">BRO<span class="logo-k">K</span>EN</div>
+      <div class="logo-big">ENGLISH</div>
     </div>
     <div class="header-right">
       Student Assessment Report<br>
@@ -107,12 +104,12 @@ function generateReportHTML(d, scores, avg) {
       <div class="s-name">${d.studentName||''}</div>
       <div class="s-meta">
         ${d.background||''}${d.background&&d.phone?' · ':''}${d.phone||''}<br>
-        Trainer: ${d.trainer||''} · ${d.date||''}<br>
+        Trainer: ${d.trainer||''} &nbsp;·&nbsp; ${d.date||''}<br>
         <strong style="color:#111">${d.course||''}</strong>
       </div>
     </div>
     <div style="text-align:center;flex-shrink:0">
-      ${d.cefr?`<div class="cefr-pill" style="background:${cc}1a;color:${cc}">${d.cefr}</div><div style="font-size:10px;color:#bbb;margin:3px 0">CEFR level</div>`:''}
+      ${d.cefr?`<div class="cefr-pill" style="background:${cc}22;color:${cc}">${d.cefr}</div><div style="font-size:10px;color:#bbb;margin:3px 0">CEFR level</div>`:''}
       <div class="avg-num" style="color:${avgColor}">${avg}<span style="font-size:13px;font-weight:400;color:#bbb">/10</span></div>
       <div style="font-size:10px;color:#bbb">overall avg</div>
     </div>
@@ -126,14 +123,14 @@ function generateReportHTML(d, scores, avg) {
   ${(d.fillers||[]).length ? `
   <div class="card">
     <div class="card-title">Filler words observed</div>
-    <div style="margin-top:2px">${fillerTags}</div>
+    <div style="margin-top:4px">${fillerTags}</div>
   </div>` : ''}
 
   ${(d.strengths||d.weaknesses) ? `
   <div class="card">
     <div class="card-title">Trainer notes</div>
-    ${d.strengths?`<div class="obs-label" style="color:#4CAF50">✓ Strengths</div><div class="obs-box">${d.strengths}</div>`:''}
-    ${d.weaknesses?`<div class="obs-label" style="color:#E24B4A">↑ Areas to improve</div><div class="obs-box">${d.weaknesses}</div>`:''}
+    ${d.strengths?`<div class="obs-label" style="color:#4CAF50">Strengths</div><div class="obs-box">${d.strengths}</div>`:''}
+    ${d.weaknesses?`<div class="obs-label" style="color:#E24B4A">Areas to improve</div><div class="obs-box">${d.weaknesses}</div>`:''}
   </div>` : ''}
 
   <div class="footer">Broken English — Kochi &nbsp;·&nbsp; brokenenglish.in</div>
@@ -141,26 +138,15 @@ function generateReportHTML(d, scores, avg) {
 </html>`;
 }
 
-// ── Generate PDF using Puppeteer ────────────────────────────────────────────
+// ── Generate PDF ────────────────────────────────────────────────────────────
 async function generatePDF(htmlContent) {
-  const browser = await puppeteer.launch({
-    args: chromium.args,
-    defaultViewport: chromium.defaultViewport,
-    executablePath: await chromium.executablePath(),
-    headless: chromium.headless,
-  });
-  try {
-    const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-    const pdf = await page.pdf({
-      format: 'A4',
-      margin: { top: '0', right: '0', bottom: '0', left: '0' },
-      printBackground: true,
-    });
-    return pdf;
-  } finally {
-    await browser.close();
-  }
+  const file = { content: htmlContent };
+  const options = {
+    format: 'A4',
+    margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' },
+    printBackground: true,
+  };
+  return await htmlPdf.generatePdf(file, options);
 }
 
 // ── Upload PDF to Google Drive ──────────────────────────────────────────────
@@ -238,10 +224,9 @@ app.post('/api/submit', async (req, res) => {
       const pdfBuffer = await generatePDF(html);
       const driveFile = await uploadPDFToDrive(auth, fileName, pdfBuffer);
       driveLink = driveFile.webViewLink || '';
-      console.log(`PDF uploaded: ${fileName}.pdf`);
+      console.log(`PDF uploaded to Drive: ${fileName}.pdf`);
     } catch (pdfErr) {
       console.error('PDF/Drive error:', pdfErr.message);
-      // Don't fail the whole request — Sheets save continues
     }
 
     // Save to Sheets
