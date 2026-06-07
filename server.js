@@ -37,7 +37,7 @@ function getAuthClient() {
   });
 }
 
-// ── GET /report/:id — serve report from query data ───────────────────────
+// ── GET /report — generate report from URL data ──────────────────────────
 app.get('/report', (req, res) => {
   try {
     const data = JSON.parse(Buffer.from(req.query.d, 'base64').toString('utf8'));
@@ -45,17 +45,18 @@ app.get('/report', (req, res) => {
 
     const cc = CEFR_COLORS[d.cefr] || '#888';
     const cb = CEFR_BG[d.cefr] || 'rgba(136,136,136,.15)';
-    const avgColor = avg >= 8 ? '#4CAF50' : avg >= 5 ? '#111' : '#E24B4A';
-    const date = new Date().toLocaleDateString('en-IN', {day:'numeric',month:'long',year:'numeric'});
+    const avgColor = avg >= 8 ? '#4CAF50' : avg >= 5 ? '#333' : '#E24B4A';
+    const date = new Date(d.submittedAt || Date.now()).toLocaleDateString('en-IN', {day:'numeric',month:'long',year:'numeric'});
     const initials = (d.studentName||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
 
+    // Score bars with colored fills
     const barRows = SCORE_KEYS.map((k,i) => `
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-        <span style="width:120px;font-size:13px;color:#666">${SCORE_LABELS[i]}</span>
-        <div style="flex:1;background:#eee;border-radius:99px;height:9px;overflow:hidden">
-          <div style="width:${(scores[k]||0)*10}%;height:100%;background:${COLORS[i]};border-radius:99px"></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:11px">
+        <span style="width:125px;font-size:13px;color:#666;flex-shrink:0">${SCORE_LABELS[i]}</span>
+        <div style="flex:1;background:#eeeeee;border-radius:99px;height:9px;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+          <div style="width:${(scores[k]||0)*10}%;height:100%;background:${COLORS[i]};border-radius:99px;-webkit-print-color-adjust:exact;print-color-adjust:exact"></div>
         </div>
-        <span style="width:28px;text-align:right;font-size:13px;font-weight:700;color:${(scores[k]||0)>=8?'#4CAF50':(scores[k]||0)>=5?'#333':'#E24B4A'}">${scores[k]||0}</span>
+        <span style="width:24px;text-align:right;font-size:13px;font-weight:700;flex-shrink:0;color:${(scores[k]||0)>=8?'#4CAF50':(scores[k]||0)>=5?'#333':'#E24B4A'}">${scores[k]||0}</span>
       </div>`).join('');
 
     const fillerTags = (d.fillers||[]).map(f =>
@@ -70,6 +71,7 @@ app.get('/report', (req, res) => {
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>@page{margin:10mm;size:A4;}@media print{head,script{display:none;}}</style>
 <title>${d.studentName||'Student'} — Assessment Report</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -78,22 +80,32 @@ app.get('/report', (req, res) => {
   body{font-family:'DM Sans',sans-serif;background:#f5f5f5;color:#111;padding:24px;}
   .wrap{max-width:720px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);}
   .header{background:#fff;padding:20px 28px;display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #FF4D00;}
-  .header-right{text-align:right;font-size:11px;color:#999;line-height:1.7;}
+  .header-right{text-align:right;font-size:11px;color:#999;line-height:1.8;}
   .student-card{display:flex;align-items:center;gap:16px;padding:20px 28px;background:#fafafa;border-bottom:1px solid #eee;}
   .avatar{width:52px;height:52px;border-radius:50%;background:#FFE8E0;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#FF4D00;flex-shrink:0;font-family:'Syne',sans-serif;}
   .s-name{font-family:'Syne',sans-serif;font-size:17px;font-weight:800;margin-bottom:3px;}
   .s-meta{font-size:12px;color:#888;line-height:1.6;}
-  .section{padding:20px 28px;border-bottom:1px solid #eee;}
-  .section-title{font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:#aaa;font-weight:700;margin-bottom:14px;}
-  .obs-box{background:#f5f5f5;border-radius:8px;padding:12px 14px;font-size:13px;color:#555;line-height:1.65;margin-top:5px;}
-  .obs-label{font-size:12px;font-weight:700;margin-top:12px;margin-bottom:4px;}
+  .section{padding:22px 28px;border-bottom:1px solid #eee;}
+  .section-title{font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:#aaa;font-weight:700;margin-bottom:16px;}
+  .obs-box{background:#f5f5f5;border-radius:8px;padding:12px 14px;font-size:13px;color:#555;line-height:1.65;margin-top:6px;}
+  .obs-label{font-size:12px;font-weight:700;margin-top:14px;margin-bottom:5px;}
   .footer{padding:16px 28px;text-align:center;font-size:11px;color:#bbb;}
   .print-btn{display:block;margin:16px auto;padding:10px 28px;background:#FF4D00;color:#fff;border:none;border-radius:8px;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;cursor:pointer;}
-  @media print{.print-btn{display:none!important;}body{background:#fff;padding:0;}.wrap{box-shadow:none;border-radius:0;}}
+  @media print{
+    .print-btn{display:none!important;}
+    body{background:#fff;padding:0;}
+    .wrap{box-shadow:none;border-radius:0;}
+    a[href]:after{content:none!important;}
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}
+    div{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+    @page{margin:10mm;}
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
+
+  <!-- HEADER -->
   <div class="header">
     <img src="data:image/jpeg;base64,${LOGO2_B64}" alt="Broken English" style="height:52px;width:auto;object-fit:contain;display:block;"/>
     <div class="header-right">
@@ -103,6 +115,7 @@ app.get('/report', (req, res) => {
     </div>
   </div>
 
+  <!-- STUDENT CARD -->
   <div class="student-card">
     <div class="avatar">${initials}</div>
     <div style="flex:1">
@@ -114,51 +127,83 @@ app.get('/report', (req, res) => {
       </div>
     </div>
     <div style="text-align:center;flex-shrink:0">
-      ${d.cefr?`<div style="display:inline-block;padding:4px 16px;border-radius:999px;font-size:16px;font-weight:800;font-family:'Syne',sans-serif;background:${cb};color:${cc}">${d.cefr}</div><div style="font-size:10px;color:#bbb;margin:4px 0">CEFR level</div>`:''}
-      <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:${avgColor}">${avg}<span style="font-size:13px;font-weight:400;color:#aaa">/10</span></div>
+      ${d.cefr?`
+        <div style="display:inline-block;padding:4px 16px;border-radius:999px;font-size:16px;font-weight:800;font-family:'Syne',sans-serif;background:${cb};color:${cc}">${d.cefr}</div>
+        <div style="font-size:10px;color:#bbb;margin:4px 0">CEFR level</div>
+      `:''}
+      <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:${avgColor};line-height:1">${avg}<span style="font-size:13px;font-weight:400;color:#aaa">/10</span></div>
       <div style="font-size:10px;color:#bbb">overall avg</div>
     </div>
   </div>
 
+  <!-- SCORE BREAKDOWN -->
   <div class="section">
     <div class="section-title">Score breakdown</div>
     ${barRows}
   </div>
 
+  <!-- RADAR -->
   <div class="section">
     <div class="section-title">Radar overview</div>
-    <div style="display:flex;justify-content:center">
-      <canvas id="radar" width="280" height="280"></canvas>
+    <div style="display:flex;justify-content:center;padding:10px 0">
+      <canvas id="radar" width="420" height="420"></canvas>
     </div>
   </div>
 
+  <!-- FILLER WORDS -->
   ${(d.fillers||[]).length ? `
   <div class="section">
     <div class="section-title">Filler words observed</div>
-    <div>${fillerTags}</div>
+    <div style="margin-top:4px">${fillerTags}</div>
   </div>` : ''}
 
+  <!-- TRAINER NOTES -->
   ${(d.strengths||d.weaknesses) ? `
   <div class="section">
     <div class="section-title">Trainer notes</div>
-    ${d.strengths?`<div class="obs-label" style="color:#4CAF50">Strengths</div><div class="obs-box">${d.strengths}</div>`:''}
-    ${d.weaknesses?`<div class="obs-label" style="color:#E24B4A">Areas to improve</div><div class="obs-box">${d.weaknesses}</div>`:''}
+    ${d.strengths ? `
+      <div class="obs-label" style="color:#4CAF50">✓ Strengths</div>
+      <div class="obs-box">${d.strengths}</div>
+    ` : ''}
+    ${d.weaknesses ? `
+      <div class="obs-label" style="color:#E24B4A">↑ Areas to improve</div>
+      <div class="obs-box">${d.weaknesses}</div>
+    ` : ''}
   </div>` : ''}
 
+  <!-- FOOTER -->
   <div class="footer">Broken English — Kochi &nbsp;·&nbsp; brokenenglish.in</div>
+
 </div>
+
 <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
+
 <script>
 new Chart(document.getElementById('radar').getContext('2d'), {
   type: 'radar',
   data: {
     labels: ${radarLabels},
-    datasets: [{data:${radarData},backgroundColor:'rgba(255,77,0,0.1)',borderColor:'#FF4D00',borderWidth:2,pointBackgroundColor:'#FF4D00',pointRadius:4}]
+    datasets: [{
+      data: ${radarData},
+      backgroundColor: 'rgba(255,77,0,0.1)',
+      borderColor: '#FF4D00',
+      borderWidth: 2,
+      pointBackgroundColor: '#FF4D00',
+      pointRadius: 5,
+    }]
   },
   options: {
-    responsive:false,
-    scales:{r:{min:0,max:10,ticks:{display:false},grid:{color:'rgba(0,0,0,0.08)'},angleLines:{color:'rgba(0,0,0,0.08)'},pointLabels:{font:{size:11},color:'#666'}}},
-    plugins:{legend:{display:false}}
+    responsive: false,
+    scales: {
+      r: {
+        min: 0, max: 10,
+        ticks: { display: false, stepSize: 2 },
+        grid: { color: 'rgba(0,0,0,0.08)' },
+        angleLines: { color: 'rgba(0,0,0,0.08)' },
+        pointLabels: { font: { size: 12 }, color: '#555' }
+      }
+    },
+    plugins: { legend: { display: false } }
   }
 });
 </script>
@@ -167,6 +212,7 @@ new Chart(document.getElementById('radar').getContext('2d'), {
 
     res.send(html);
   } catch(e) {
+    console.error('Report error:', e.message);
     res.status(400).send('Invalid report link');
   }
 });
@@ -211,11 +257,14 @@ app.post('/api/submit', async (req, res) => {
     const vals = SCORE_KEYS.map(k => scores[k] || 0).filter(v => v > 0);
     const avg = Math.round(vals.reduce((a,b) => a+b, 0) / vals.length);
 
+    // Add submission timestamp to data
+    d.submittedAt = new Date().toISOString();
+
     // Encode report data in URL
     const reportData = Buffer.from(JSON.stringify({ d, scores, avg })).toString('base64');
     const reportLink = `${BASE_URL}/report?d=${reportData}`;
 
-    console.log(`Report link generated for: ${d.studentName}`);
+    console.log(`Report generated for: ${d.studentName}`);
 
     const row = [
       new Date().toISOString(), d.studentName||'', d.phone||'', d.trainer||'',
