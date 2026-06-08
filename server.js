@@ -11,8 +11,16 @@ app.use(express.json());
 app.use(express.static('public'));
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+const MASTER_SHEET_ID = process.env.MASTER_SHEET_ID || '1YLd_SWtFUCzxAF-BxDx8tDHK8NFMHYzCyhVOQkQwSYI';
+const MASTER_SHEET_NAME = 'Assessments';
+const OUTCOMES_SHEET_NAME = 'Call Outcomes';
 const SHEET_NAME = 'Assessments';
 const BASE_URL = process.env.BASE_URL || 'https://broken-english-assessment.onrender.com';
+
+const OUTCOME_HEADERS = [
+  'Timestamp', 'Student Name', 'Phone/ID', 'Trainer', 'Date', 'Background',
+  'Call Outcome', 'Reschedule Date', 'Reschedule Time', 'Notes'
+];
 
 const HEADERS = [
   'Timestamp', 'Student Name', 'Phone/ID', 'Trainer', 'Date', 'Background',
@@ -243,6 +251,55 @@ async function ensureHeaders(sheets) {
   }
 }
 
+async function ensureMasterHeaders(sheets) {
+  // Ensure Assessments tab
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: MASTER_SHEET_ID, range: `${MASTER_SHEET_NAME}!A1:T1`,
+    });
+    if (!res.data.values || res.data.values.length === 0) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: MASTER_SHEET_ID, range: `${MASTER_SHEET_NAME}!A1`,
+        valueInputOption: 'RAW', requestBody: { values: [HEADERS] },
+      });
+    }
+  } catch (err) {
+    try {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: MASTER_SHEET_ID,
+        requestBody: { requests: [{ addSheet: { properties: { title: MASTER_SHEET_NAME } } }] }
+      });
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: MASTER_SHEET_ID, range: `${MASTER_SHEET_NAME}!A1`,
+        valueInputOption: 'RAW', requestBody: { values: [HEADERS] },
+      });
+    } catch (e) { console.error('Master header error:', e.message); }
+  }
+  // Ensure Call Outcomes tab
+  try {
+    const res2 = await sheets.spreadsheets.values.get({
+      spreadsheetId: MASTER_SHEET_ID, range: `${OUTCOMES_SHEET_NAME}!A1:J1`,
+    });
+    if (!res2.data.values || res2.data.values.length === 0) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: MASTER_SHEET_ID, range: `${OUTCOMES_SHEET_NAME}!A1`,
+        valueInputOption: 'RAW', requestBody: { values: [OUTCOME_HEADERS] },
+      });
+    }
+  } catch (err) {
+    try {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: MASTER_SHEET_ID,
+        requestBody: { requests: [{ addSheet: { properties: { title: OUTCOMES_SHEET_NAME } } }] }
+      });
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: MASTER_SHEET_ID, range: `${OUTCOMES_SHEET_NAME}!A1`,
+        valueInputOption: 'RAW', requestBody: { values: [OUTCOME_HEADERS] },
+      });
+    } catch (e) { console.error('Outcomes header error:', e.message); }
+  }
+}
+
 // ── POST /api/submit ──────────────────────────────────────────────────────
 app.post('/api/submit', async (req, res) => {
   const d = req.body;
@@ -284,6 +341,66 @@ app.post('/api/submit', async (req, res) => {
     res.json({ success: true, avg, reportLink });
   } catch (err) {
     console.error('Submit error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/log-outcome ────────────────────────────────────────────────────
+app.post('/api/log-outcome', async (req, res) => {
+  const d = req.body;
+  if (!SHEET_ID) return res.status(500).json({ error: 'GOOGLE_SHEET_ID not configured' });
+  try {
+    const auth = getAuthClient();
+    const sheets = google.sheets({ version: 'v4', auth });
+    await ensureHeaders(sheets);
+
+    const row = [
+      new Date().toISOString(),
+      d.studentName || '',
+      d.phone || '',
+      d.trainer || '',
+      d.date || '',
+      d.background || '',
+      '', '', '', '', '', '', '', '', '', '', // empty score columns
+      d.callOutcome || '',
+      d.rescheduleDate ? `Rescheduled to ${d.rescheduleDate} ${d.rescheduleTime}` : '',
+      '', // course
+      '', // report link
+    ];
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID, range: `${SHEET_NAME}!A:T`,
+      valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS',
+      requestBody: { values: [row] },
+    });
+
+    // Save to Call Outcomes tab in master sheet
+    try {
+      const masterSheets = google.sheets({ version: 'v4', auth });
+      await ensureMasterHeaders(masterSheets);
+      const outcomeRow = [
+        new Date().toISOString(),
+        d.studentName || '',
+        d.phone || '',
+        d.trainer || '',
+        d.date || '',
+        d.background || '',
+        d.callOutcome || '',
+        d.rescheduleDate || '',
+        d.rescheduleTime || '',
+        d.notes || '',
+      ];
+      await masterSheets.spreadsheets.values.append({
+        spreadsheetId: MASTER_SHEET_ID, range: `${OUTCOMES_SHEET_NAME}!A:J`,
+        valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS',
+        requestBody: { values: [outcomeRow] },
+      });
+    } catch(e) { console.error('Master sheet log-outcome error:', e.message); }
+
+    console.log(`Call outcome logged: ${d.studentName} — ${d.callOutcome}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Log outcome error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
