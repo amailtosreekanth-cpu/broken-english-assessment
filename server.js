@@ -338,6 +338,19 @@ app.post('/api/submit', async (req, res) => {
       requestBody: { values: [row] },
     });
 
+    // Save to master sheet (SYI)
+    try {
+      await ensureMasterHeaders(sheets);
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: MASTER_SHEET_ID, range: `${MASTER_SHEET_NAME}!A:T`,
+        valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS',
+        requestBody: { values: [row] },
+      });
+      console.log('Saved to master sheet:', d.studentName);
+    } catch (masterErr) {
+      console.error('Master sheet error:', masterErr.message);
+    }
+
     res.json({ success: true, avg, reportLink });
   } catch (err) {
     console.error('Submit error:', err.message);
