@@ -62,11 +62,64 @@ function getAuthClient() {
   });
 }
 
-// ── Send report notification to counsellor ───────────────────────────────
-async function sendReportNotification(studentName, phone, trainer, date, counsellorName, reportLink, cefr, avg, course) {
+// ── Normalize phone to last 10 digits for matching ───────────────────────
+function normalizePhone(phone) {
+  const digits = (phone || '').replace(/\D/g, '');
+  return digits.slice(-10);
+}
+
+// ── Look up counsellor name from Form Responses 2 by student phone ────────
+async function lookupCounsellor(sheets, studentPhone) {
   try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: MASTER_SHEET_ID,
+      range: 'Form Responses 2!A:H',
+    });
+    const rows = response.data.values || [];
+    if (rows.length <= 1) return null;
+
+    const headers = rows[0].map(h => h.toString().trim());
+    const phoneCol = headers.findIndex(h => h.toLowerCase().includes('contact') || h.toLowerCase().includes('phone'));
+    const counsellorCol = headers.findIndex(h => h.toLowerCase().includes('counsellor') || h.toLowerCase().includes('counselor'));
+
+    if (phoneCol === -1 || counsellorCol === -1) {
+      console.log('Could not find phone or counsellor column in Form Responses 2');
+      return null;
+    }
+
+    const normalizedInput = normalizePhone(studentPhone);
+
+    // Search from bottom up — most recent entry wins if duplicate
+    for (let i = rows.length - 1; i >= 1; i--) {
+      const row = rows[i];
+      const rowPhone = normalizePhone(row[phoneCol] || '');
+      if (rowPhone === normalizedInput && rowPhone.length === 10) {
+        return (row[counsellorCol] || '').trim();
+      }
+    }
+
+    console.log(`No Form Responses 2 match found for phone: ${studentPhone}`);
+    return null;
+  } catch (err) {
+    console.error('lookupCounsellor error:', err.message);
+    return null;
+  }
+}
+
+// ── Send report notification to counsellor ───────────────────────────────
+async function sendReportNotification(sheets, studentName, phone, trainer, date, reportLink, cefr, avg, course) {
+  try {
+    // Look up counsellor from Form Responses 2 by phone number
+    const counsellorName = await lookupCounsellor(sheets, phone);
+
+    if (!counsellorName) {
+      console.log(`Could not find counsellor for ${studentName} (${phone}) — skipping notification`);
+      return;
+    }
+
+    // Match counsellor name to email
     let counsellorEmail = null;
-    const nameLower = (counsellorName || '').toLowerCase().trim();
+    const nameLower = counsellorName.toLowerCase().trim();
     for (const [key, email] of Object.entries(COUNSELLOR_EMAILS)) {
       if (nameLower.includes(key.toLowerCase())) {
         counsellorEmail = email;
@@ -75,7 +128,7 @@ async function sendReportNotification(studentName, phone, trainer, date, counsel
     }
 
     if (!counsellorEmail) {
-      console.log(`No email found for counsellor: ${counsellorName} — skipping notification`);
+      console.log(`No email mapped for counsellor: ${counsellorName} — skipping notification`);
       return;
     }
 
@@ -422,12 +475,13 @@ app.post('/api/submit', async (req, res) => {
     }
 
     // Send report notification to the counsellor who booked this student
+    // Looks up counsellor from Form Responses 2 by matching phone number (last 10 digits)
     sendReportNotification(
+      sheets,
       d.studentName || '',
       d.phone || '',
       d.trainer || '',
       d.date || '',
-      d.counsellor || '',
       reportLink,
       d.cefr || '',
       avg,
