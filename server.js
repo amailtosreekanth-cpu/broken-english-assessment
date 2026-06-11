@@ -544,18 +544,42 @@ app.get('/api/slots', async (req, res) => {
                 normalizedRowDate = d.toISOString().split('T')[0];
               }
             } catch(e) {}
-            if (normalizedRowDate === date && trainerCol >= 0 && row[trainerCol]) {
-              // Parse the time — it's stored as array from time picker
-              const timeVal = row[timeCol];
+            if (normalizedRowDate === date) {
+              // Read assigned trainer if available
+              const assignedTrainer = (trainerCol >= 0 && row[trainerCol]) ? row[trainerCol].toString().trim() : null;
+
+              // Parse the time — Google Sheets saves time picker as "14:45:00" or "2:45:00 PM"
+              const timeVal = (row[timeCol] || '').toString().trim();
               let startMin = -1;
-              if (Array.isArray(timeVal) && timeVal.length >= 2) {
-                startMin = parseInt(timeVal[0]) * 60 + parseInt(timeVal[1]);
-              } else if (typeof timeVal === 'string' && timeVal.includes(':')) {
-                const parts = timeVal.split(':');
-                startMin = parseInt(parts[0]) * 60 + parseInt(parts[1] || 0);
+              if (timeVal) {
+                const upper = timeVal.toUpperCase();
+                // Handle "2:45 PM" or "2:45:00 PM" format
+                const m12 = upper.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/);
+                if (m12) {
+                  let h = parseInt(m12[1]);
+                  const mn = parseInt(m12[2]);
+                  if (m12[3] === 'PM' && h !== 12) h += 12;
+                  if (m12[3] === 'AM' && h === 12) h = 0;
+                  startMin = h * 60 + mn;
+                }
+                // Handle "14:45:00" or "14:45" format (24hr)
+                if (startMin < 0) {
+                  const m24 = timeVal.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+                  if (m24) {
+                    startMin = parseInt(m24[1]) * 60 + parseInt(m24[2]);
+                  }
+                }
               }
               if (startMin >= 0) {
-                bookedSlots.push({ trainer: row[trainerCol].toString().trim(), startMin });
+                if (assignedTrainer) {
+                  // Block only the assigned trainer's slot
+                  bookedSlots.push({ trainer: assignedTrainer, startMin });
+                } else {
+                  // No trainer assigned yet — block that time slot for ALL trainers
+                  for (const t of ['Josephine','Mariyam','Aniyan','Alok','Afzal']) {
+                    bookedSlots.push({ trainer: t, startMin });
+                  }
+                }
               }
             }
           }
