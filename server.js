@@ -608,7 +608,11 @@ app.get('/api/slots', async (req, res) => {
 });
 
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  if (req.path === '/booking') {
+    res.sendFile(path.join(__dirname, 'public', 'booking.html'));
+  } else {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  }
 });
 
 app.listen(PORT, () => {
