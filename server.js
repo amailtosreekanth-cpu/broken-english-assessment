@@ -531,7 +531,7 @@ app.get('/api/slots', async (req, res) => {
       if (rows.length > 1) {
         const headers = rows[0].map(h => h.toString().trim());
         const dateCol    = headers.findIndex(h => h.toLowerCase().includes('date'));
-        const timeCol    = headers.findIndex(h => h.toLowerCase().includes('time'));
+        const timeCol    = headers.findIndex(h => h.toLowerCase().includes('assessment time') || (h.toLowerCase().includes('time') && !h.toLowerCase().includes('timestamp') && !h.toLowerCase().includes('stamp')));
         const trainerCol = headers.findIndex(h => h.toLowerCase().includes('assigned'));
         if (dateCol >= 0 && timeCol >= 0) {
           for (let i = 1; i < rows.length; i++) {
