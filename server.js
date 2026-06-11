@@ -537,23 +537,37 @@ app.get('/api/slots', async (req, res) => {
             const row = rows[i];
             const rowDate = (row[dateCol] || '').toString().trim();
             // Normalize dates to YYYY-MM-DD for comparison
+            // Google Sheets stores as "6/15/2026" (M/D/YYYY) or "2026-06-15"
             let normalizedRowDate = '';
             try {
-              const d = new Date(rowDate);
-              if (!isNaN(d.getTime())) {
-                normalizedRowDate = d.toISOString().split('T')[0];
+              // Handle M/D/YYYY format e.g. "6/15/2026"
+              const mdy = rowDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+              if (mdy) {
+                const month = mdy[1].padStart(2,'0');
+                const day   = mdy[2].padStart(2,'0');
+                normalizedRowDate = mdy[3] + '-' + month + '-' + day;
+              } else {
+                // Try standard Date parse for other formats
+                const d = new Date(rowDate);
+                if (!isNaN(d.getTime())) {
+                  // Use UTC to avoid timezone shifts
+                  const y = d.getFullYear();
+                  const m = (d.getMonth()+1).toString().padStart(2,'0');
+                  const dy = d.getDate().toString().padStart(2,'0');
+                  normalizedRowDate = y + '-' + m + '-' + dy;
+                }
               }
             } catch(e) {}
             if (normalizedRowDate === date) {
               // Read assigned trainer if available
               const assignedTrainer = (trainerCol >= 0 && row[trainerCol]) ? row[trainerCol].toString().trim() : null;
 
-              // Parse the time — Google Sheets saves time picker as "14:45:00" or "2:45:00 PM"
+              // Parse the time — Google Sheets saves as "1:00:00 PM" or "13:00:00"
               const timeVal = (row[timeCol] || '').toString().trim();
               let startMin = -1;
               if (timeVal) {
                 const upper = timeVal.toUpperCase();
-                // Handle "2:45 PM" or "2:45:00 PM" format
+                // Handle "1:00:00 PM" or "1:00 PM" format (12hr with or without seconds)
                 const m12 = upper.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/);
                 if (m12) {
                   let h = parseInt(m12[1]);
@@ -562,7 +576,7 @@ app.get('/api/slots', async (req, res) => {
                   if (m12[3] === 'AM' && h === 12) h = 0;
                   startMin = h * 60 + mn;
                 }
-                // Handle "14:45:00" or "14:45" format (24hr)
+                // Handle "13:00:00" or "13:00" format (24hr with or without seconds)
                 if (startMin < 0) {
                   const m24 = timeVal.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
                   if (m24) {
