@@ -535,29 +535,30 @@ app.get('/api/slots', async (req, res) => {
         if (dateCol >= 0 && timeCol >= 0) {
           for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
-            const rowDate = (row[dateCol] || '').toString().trim();
-            // Normalize dates to YYYY-MM-DD for comparison
-            // Google Sheets stores as "6/15/2026" (M/D/YYYY) or "2026-06-15"
+            const rawDate = row[dateCol];
             let normalizedRowDate = '';
             try {
-              // Handle M/D/YYYY format e.g. "6/15/2026"
-              const mdy = rowDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-              if (mdy) {
-                const month = mdy[1].padStart(2,'0');
-                const day   = mdy[2].padStart(2,'0');
-                normalizedRowDate = mdy[3] + '-' + month + '-' + day;
+              if (rawDate instanceof Date) {
+                const y  = rawDate.getFullYear();
+                const m  = (rawDate.getMonth()+1).toString().padStart(2,'0');
+                const dy = rawDate.getDate().toString().padStart(2,'0');
+                normalizedRowDate = y + '-' + m + '-' + dy;
               } else {
-                // Try standard Date parse for other formats
-                const d = new Date(rowDate);
-                if (!isNaN(d.getTime())) {
-                  // Use UTC to avoid timezone shifts
-                  const y = d.getFullYear();
-                  const m = (d.getMonth()+1).toString().padStart(2,'0');
-                  const dy = d.getDate().toString().padStart(2,'0');
-                  normalizedRowDate = y + '-' + m + '-' + dy;
+                const rowDate = (rawDate || '').toString().trim();
+                const mdy = rowDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+                if (mdy) {
+                  normalizedRowDate = mdy[3] + '-' + mdy[1].padStart(2,'0') + '-' + mdy[2].padStart(2,'0');
+                } else if (rowDate.match(/^\d{4}-\d{2}-\d{2}/)) {
+                  normalizedRowDate = rowDate.substring(0, 10);
+                } else if (rowDate) {
+                  const d = new Date(rowDate);
+                  if (!isNaN(d.getTime()) && d.getFullYear() > 1970) {
+                    normalizedRowDate = d.getFullYear() + '-' + (d.getMonth()+1).toString().padStart(2,'0') + '-' + d.getDate().toString().padStart(2,'0');
+                  }
                 }
               }
             } catch(e) {}
+            console.log('Date raw:', JSON.stringify(rawDate), 'normalized:', normalizedRowDate, 'target:', date);
             if (normalizedRowDate === date) {
               // Read assigned trainer if available
               const assignedTrainer = (trainerCol >= 0 && row[trainerCol]) ? row[trainerCol].toString().trim() : null;
