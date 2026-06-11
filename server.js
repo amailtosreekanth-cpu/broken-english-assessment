@@ -524,7 +524,8 @@ app.get('/api/slots', async (req, res) => {
     try {
       const formResp = await sheets.spreadsheets.values.get({
         spreadsheetId: MASTER_SHEET_ID,
-        range: 'Form Responses 2!A:H'
+        range: 'Form Responses 2!A1:H500',
+        valueRenderOption: 'FORMATTED_VALUE'
       });
       const rows = formResp.data.values || [];
       if (rows.length > 1) {
@@ -560,6 +561,8 @@ app.get('/api/slots', async (req, res) => {
             } catch(e) {}
             console.log('Date raw:', JSON.stringify(rawDate), 'normalized:', normalizedRowDate, 'target:', date);
             if (normalizedRowDate === date) {
+              // Log the time value for debugging
+              console.log('Time raw:', JSON.stringify(row[timeCol]), 'trainer col:', trainerCol, 'trainer val:', row[trainerCol]);
               // Read assigned trainer if available
               const assignedTrainer = (trainerCol >= 0 && row[trainerCol]) ? row[trainerCol].toString().trim() : null;
 
