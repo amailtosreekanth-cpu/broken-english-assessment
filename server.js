@@ -449,130 +449,122 @@ app.get('/api/slots', async (req, res) => {
     const sheets = google.sheets({ version: 'v4', auth });
     const date   = req.query.date;
 
-    // Parse requested date → day name
     const requestedDate = date ? new Date(date) : new Date();
     const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
     const dayName  = dayNames[requestedDate.getDay()];
 
     const TRAINER_PRIORITY = ['Josephine','Mariyam','Aniyan','Alok','Afzal'];
-    const TRAINER_SCHEDULE_SHEET_ID = '1TfL61kl3VeTk7vYhl4IgTgtpi3yhicdCbUPr9QMydBw';
-    const AVAILABILITY_TAB = "Trainers' availability Chart";
+    const TRAINER_SCHEDULE_ID = '1TfL61kl3VeTk7vYhl4IgTgtpi3yhicdCbUPr9QMydBw';
 
-    // ── Read availability chart from sheet ───────────────────────────────
+    // ── Read availability chart ──────────────────────────────────────────
     const sheetResp = await sheets.spreadsheets.values.get({
-      spreadsheetId: TRAINER_SCHEDULE_SHEET_ID,
-      range: `${AVAILABILITY_TAB}!A:G`,
+      spreadsheetId: TRAINER_SCHEDULE_ID,
+      range: "Trainers' availability Chart!A:G",
       valueRenderOption: 'FORMATTED_VALUE'
     });
-
     const rows = sheetResp.data.values || [];
 
-    // ── Parse trainer blocks ─────────────────────────────────────────────
-    // Each trainer block:
-    //   Header row: "TrainerName - (hours)" in col A
-    //   Column header row: "Time :" in col A, day names in cols B-G
-    //   Data rows: time range in col A, cell value in day column
-    // Available = cell value is "Free", "Open", or contains "Assessment"
-
-    const AVAILABLE_VALUES = ['free', 'open', 'assessment slot', 'assessment'];
-
+    // Available cell values
     function isAvailable(val) {
       if (!val) return false;
       const v = val.toString().toLowerCase().trim();
-      return AVAILABLE_VALUES.some(a => v === a || v.includes('assessment'));
+      return v === 'free' || v === 'open' || v.startsWith('assessment');
     }
 
-    // Parse time string like "9 a.m. -10 a. m." or "3 p.m. - 4 p.m." → minutes
-    function parseTimeRange(timeStr) {
-      if (!timeStr) return null;
-      const str = timeStr.toString().trim()
+    // Parse time string like "9 a.m. -10 a. m." or "3 p.m. - 4 p.m." or "9:30 p.m. - 10:30 p.m."
+    function parseTimeRange(raw) {
+      if (!raw) return null;
+      // Normalise: remove spaces around dots, unify am/pm
+      let s = raw.toString()
+        .replace(/a\.\s*m\./gi, 'am')
+        .replace(/p\.\s*m\./gi, 'pm')
         .replace(/\s+/g, ' ')
-        .replace(/a\. m\./gi, 'am').replace(/a\.m\./gi, 'am').replace(/ am/gi, 'am')
-        .replace(/p\. m\./gi, 'pm').replace(/p\.m\./gi, 'pm').replace(/ pm/gi, 'pm')
-        .replace(/a m/gi, 'am').replace(/p m/gi, 'pm');
+        .trim();
 
-      // Match patterns like "9am-10am", "3pm - 4pm", "9:30am-10:30am"
-      const m = str.match(/(\d{1,2}(?::\d{2})?)\s*(am|pm)\s*[-–to]+\s*(\d{1,2}(?::\d{2})?)\s*(am|pm)/i);
+      // Match: optional space, digits, optional :minutes, am/pm, separator, digits, optional :minutes, am/pm
+      const re = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*[-\u2013to]+\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i;
+      const m = s.match(re);
       if (!m) return null;
 
-      function toMins(timepart, ampm) {
-        const parts = timepart.split(':');
-        let h = parseInt(parts[0]);
-        const min = parseInt(parts[1] || '0');
-        const ap = ampm.toLowerCase();
-        if (ap === 'pm' && h !== 12) h += 12;
-        if (ap === 'am' && h === 12) h = 0;
-        return h * 60 + min;
+      function toMin(h, min, ap) {
+        let hh = parseInt(h);
+        const mm = parseInt(min || '0');
+        if (ap.toLowerCase() === 'pm' && hh !== 12) hh += 12;
+        if (ap.toLowerCase() === 'am' && hh === 12) hh = 0;
+        return hh * 60 + mm;
       }
 
-      const start = toMins(m[1], m[2]);
-      const end   = toMins(m[3], m[4]);
-      return { start, end };
+      const start = toMin(m[1], m[2], m[3]);
+      const end   = toMin(m[4], m[5], m[6]);
+      if (end > start) return { start, end };
+      return null;
     }
 
-    // Build trainer → available time ranges map for the requested day
-    const trainerRanges = {}; // { "Josephine": [{start, end}, ...] }
+    // Build trainer name → available ranges for requested day
+    // Sheet structure:
+    //   Row with trainer name in col A (e.g. "Mariyam - (11:30 p.m. - 10:30 p.m)")
+    //   Next row(s): "Time :" header with day names in cols B-G
+    //   Then data rows until blank or next trainer header
+    const trainerRanges = {};
 
     let currentTrainer = null;
-    let dayCol = -1;
+    let dayColIndex    = -1;
+    let inDataRows     = false;
 
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+      const row  = rows[i];
       const col0 = (row[0] || '').toString().trim();
 
-      // Detect trainer name header (contains a trainer name)
-      const trainerMatch = TRAINER_PRIORITY.find(t =>
-        col0.toLowerCase().includes(t.toLowerCase())
-      );
-
-      if (trainerMatch && col0 !== 'Time :') {
-        currentTrainer = trainerMatch;
-        dayCol = -1; // reset until we find Time: row
-        continue;
+      // Check if this row is a trainer name header
+      // It contains a trainer name but is NOT the "Time :" row
+      if (col0 !== 'Time :') {
+        const found = TRAINER_PRIORITY.find(t =>
+          col0.toLowerCase().includes(t.toLowerCase())
+        );
+        if (found) {
+          currentTrainer = found;
+          dayColIndex    = -1;
+          inDataRows     = false;
+          continue;
+        }
       }
 
-      // Detect column header row "Time :"
+      // Check if this is the "Time :" column header row for the current trainer
       if (col0 === 'Time :' && currentTrainer) {
-        // Find which column is our target day
-        dayCol = -1;
+        dayColIndex = -1;
+        inDataRows  = false;
         for (let c = 1; c < row.length; c++) {
-          const h = (row[c] || '').toString().trim();
-          if (h === dayName) {
-            dayCol = c;
+          if ((row[c] || '').toString().trim() === dayName) {
+            dayColIndex = c;
             break;
           }
         }
+        if (dayColIndex >= 0) inDataRows = true;
         continue;
       }
 
-      // Data row — if we have a trainer and day column
-      if (currentTrainer && dayCol >= 0 && col0) {
-        // Stop if we hit another trainer's header
-        const nextTrainer = TRAINER_PRIORITY.find(t =>
-          col0.toLowerCase().includes(t.toLowerCase()) && col0 !== 'Time :'
-        );
-        if (nextTrainer && nextTrainer !== currentTrainer) {
-          currentTrainer = nextTrainer;
-          dayCol = -1;
-          continue;
-        }
-
-        const cellVal = (row[dayCol] || '').toString().trim();
+      // Data row
+      if (inDataRows && currentTrainer && dayColIndex >= 0 && col0) {
+        const cellVal = (row[dayColIndex] || '').toString().trim();
         if (isAvailable(cellVal)) {
           const range = parseTimeRange(col0);
-          if (range && range.start >= 0 && range.end > range.start) {
+          if (range) {
             if (!trainerRanges[currentTrainer]) trainerRanges[currentTrainer] = [];
-            trainerRanges[currentTrainer].push(range);
+            // Avoid duplicate ranges
+            const exists = trainerRanges[currentTrainer].some(r => r.start === range.start && r.end === range.end);
+            if (!exists) trainerRanges[currentTrainer].push(range);
           }
         }
       }
     }
 
-    console.log('Day:', dayName, '| Trainer ranges:', JSON.stringify(
-      Object.fromEntries(Object.entries(trainerRanges).map(([k,v]) => [k, v.map(r => r.start+'-'+r.end)]))
+    console.log('Day:', dayName, '| Ranges:', JSON.stringify(
+      Object.fromEntries(Object.entries(trainerRanges).map(([k,v]) =>
+        [k, v.map(r => r.start + '-' + r.end)]
+      ))
     ));
 
-    // ── Get existing bookings for this date ──────────────────────────────
+    // ── Get existing bookings ────────────────────────────────────────────
     let bookedSlots = [];
     try {
       const formResp = await sheets.spreadsheets.values.get({
@@ -580,32 +572,31 @@ app.get('/api/slots', async (req, res) => {
         range: 'Form Responses 2!A1:Z500',
         valueRenderOption: 'FORMATTED_VALUE'
       });
-      const formRows = formResp.data.values || [];
-      if (formRows.length > 1) {
-        const headers = formRows[0].map(h => h.toString().trim());
+      const frows = formResp.data.values || [];
+      if (frows.length > 1) {
+        const headers = frows[0].map(h => h.toString().trim());
         let dateCol = -1, timeCol = -1, trainerCol = -1;
         for (let ci = 0; ci < headers.length; ci++) {
           const h = headers[ci].toLowerCase().trim();
-          if (dateCol < 0 && h.includes('date') && h.includes('assessment')) dateCol = ci;
+          if (dateCol < 0 && h.includes('assessment') && h.includes('date')) dateCol = ci;
           if (timeCol < 0 && h === 'assessment time') timeCol = ci;
           if (trainerCol < 0 && h.includes('assigned')) trainerCol = ci;
         }
         if (dateCol < 0) dateCol = headers.findIndex(h => h.toLowerCase().includes('date') && !h.toLowerCase().includes('update'));
-        if (timeCol < 0) timeCol = headers.findIndex(h => h.toLowerCase().includes('time') && !h.toLowerCase().includes('timestamp') && !h.toLowerCase().includes('stamp'));
+        if (timeCol < 0) timeCol = headers.findIndex(h => h.toLowerCase().includes('time') && !h.toLowerCase().includes('timestamp'));
 
-        for (let i = 1; i < formRows.length; i++) {
-          const row = formRows[i];
-          const rawDate = row[dateCol];
+        for (let i = 1; i < frows.length; i++) {
+          const row = frows[i];
           let normalizedRowDate = '';
           try {
-            const rowDate = (rawDate || '').toString().trim();
-            const mdy = rowDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            const rd = (row[dateCol] || '').toString().trim();
+            const mdy = rd.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
             if (mdy) {
               normalizedRowDate = mdy[3] + '-' + mdy[1].padStart(2,'0') + '-' + mdy[2].padStart(2,'0');
-            } else if (rowDate.match(/^\d{4}-\d{2}-\d{2}/)) {
-              normalizedRowDate = rowDate.substring(0, 10);
-            } else if (rowDate) {
-              const d = new Date(rowDate);
+            } else if (rd.match(/^\d{4}-\d{2}-\d{2}/)) {
+              normalizedRowDate = rd.substring(0,10);
+            } else if (rd) {
+              const d = new Date(rd);
               if (!isNaN(d.getTime()) && d.getFullYear() > 1970) {
                 normalizedRowDate = d.getFullYear() + '-' + (d.getMonth()+1).toString().padStart(2,'0') + '-' + d.getDate().toString().padStart(2,'0');
               }
@@ -614,66 +605,56 @@ app.get('/api/slots', async (req, res) => {
 
           if (normalizedRowDate === date) {
             const assignedTrainer = (trainerCol >= 0 && row[trainerCol]) ? row[trainerCol].toString().trim() : null;
-            const timeVal = (row[timeCol] || '').toString().trim();
+            const tv = (row[timeCol] || '').toString().trim().toUpperCase();
             let startMin = -1;
-            if (timeVal) {
-              const upper = timeVal.toUpperCase();
-              const m12 = upper.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/);
-              if (m12) {
-                let h = parseInt(m12[1]);
-                const mn = parseInt(m12[2]);
-                if (m12[3] === 'PM' && h !== 12) h += 12;
-                if (m12[3] === 'AM' && h === 12) h = 0;
-                startMin = h * 60 + mn;
-              }
-              if (startMin < 0) {
-                const m24 = timeVal.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
-                if (m24) startMin = parseInt(m24[1]) * 60 + parseInt(m24[2]);
-              }
+            const m12 = tv.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/);
+            if (m12) {
+              let h = parseInt(m12[1]);
+              if (m12[3] === 'PM' && h !== 12) h += 12;
+              if (m12[3] === 'AM' && h === 12) h = 0;
+              startMin = h * 60 + parseInt(m12[2]);
+            }
+            if (startMin < 0) {
+              const m24 = tv.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+              if (m24) startMin = parseInt(m24[1]) * 60 + parseInt(m24[2]);
             }
             if (startMin >= 0) {
               if (assignedTrainer) {
                 bookedSlots.push({ trainer: assignedTrainer, startMin });
               } else {
-                for (const t of TRAINER_PRIORITY) {
-                  bookedSlots.push({ trainer: t, startMin });
-                }
+                for (const t of TRAINER_PRIORITY) bookedSlots.push({ trainer: t, startMin });
               }
             }
           }
         }
       }
-    } catch(e) {
-      console.log('Could not read bookings:', e.message);
-    }
+    } catch(e) { console.log('Bookings read error:', e.message); }
 
     // ── Build 15-minute slot grid ────────────────────────────────────────
-    const SLOT_DURATION = 15;
+    const SLOT_MIN = 15;
 
-    function formatTime(minutes) {
-      const h = Math.floor(minutes / 60);
-      const m = minutes % 60;
-      const ampm = h >= 12 ? 'PM' : 'AM';
-      const h12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
-      return h12 + ':' + m.toString().padStart(2, '0') + ' ' + ampm;
+    function fmtTime(min) {
+      const h = Math.floor(min/60), m = min%60;
+      const ap = h >= 12 ? 'PM' : 'AM';
+      const h12 = h > 12 ? h-12 : (h===0?12:h);
+      return h12 + ':' + m.toString().padStart(2,'0') + ' ' + ap;
     }
 
     const result = {};
     for (const trainer of TRAINER_PRIORITY) {
       const ranges = trainerRanges[trainer] || [];
       const slots  = [];
-      for (const { start: rangeStart, end: rangeEnd } of ranges) {
-        let t = rangeStart;
-        while (t + SLOT_DURATION <= rangeEnd) {
-          const isBooked = bookedSlots.some(b => b.trainer === trainer && b.startMin === t);
+      for (const { start, end } of ranges) {
+        let t = start;
+        while (t + SLOT_MIN <= end) {
           slots.push({
             startMin:  t,
-            endMin:    t + SLOT_DURATION,
-            label:     formatTime(t) + ' – ' + formatTime(t + SLOT_DURATION),
-            startTime: formatTime(t),
-            booked:    isBooked
+            endMin:    t + SLOT_MIN,
+            label:     fmtTime(t) + ' – ' + fmtTime(t + SLOT_MIN),
+            startTime: fmtTime(t),
+            booked:    bookedSlots.some(b => b.trainer === trainer && b.startMin === t)
           });
-          t += SLOT_DURATION;
+          t += SLOT_MIN;
         }
       }
       if (slots.length > 0) result[trainer] = slots;
