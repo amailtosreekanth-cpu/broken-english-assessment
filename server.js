@@ -442,7 +442,7 @@ app.get('/api/records', async (req, res) => {
 });
 
 
-// ── GET /api/slots — Dynamic trainer availability from sheet ────────────────
+// ── GET /api/slots — Trainer availability for booking interface ──────────
 app.get('/api/slots', async (req, res) => {
   try {
     const auth   = getAuthClient();
@@ -453,116 +453,53 @@ app.get('/api/slots', async (req, res) => {
     const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
     const dayName  = dayNames[requestedDate.getDay()];
 
-    const TRAINER_PRIORITY = ['Josephine','Mariyam','Aniyan','Alok','Afzal'];
-    const TRAINER_SCHEDULE_ID = '1TfL61kl3VeTk7vYhl4IgTgtpi3yhicdCbUPr9QMydBw';
+    const TRAINER_PRIORITY = ['Josephine','Mariyam','Afzal'];
 
-    // ── Read availability chart ──────────────────────────────────────────
-    const sheetResp = await sheets.spreadsheets.values.get({
-      spreadsheetId: TRAINER_SCHEDULE_ID,
-      range: "Trainers' availability Chart!A:G",
-      valueRenderOption: 'FORMATTED_VALUE'
-    });
-    const rows = sheetResp.data.values || [];
+    function getSlotsForDay(day) {
+      if (day === 'Saturday') {
+        return {
+          'Josephine': [[540,600],[600,660],[720,780],[780,840],[840,900],[900,960],[960,1020],[1020,1080],[1080,1140]],
+          'Mariyam':   [[540,600],[600,660],[660,720],[720,780],[780,840],[840,900],[900,960],[960,1020],[1020,1080],[1080,1140],[1140,1200],[1200,1260],[1260,1320]],
+          'Afzal':     [[540,600],[600,660],[660,720],[720,780],[780,840],[840,900],[900,960],[960,1020],[1020,1080],[1080,1140],[1140,1200],[1200,1260]]
+        };
+      }
+      if (day === 'Sunday') return { 'Josephine': [], 'Mariyam': [], 'Afzal': [] };
 
-    // Available cell values
-    function isAvailable(val) {
-      if (!val) return false;
-      const v = val.toString().toLowerCase().trim();
-      return v === 'free' || v === 'open' || v.startsWith('assessment');
+      // Josephine: free same slots all weekdays
+      // 9-10AM, 10-11AM, 12-1PM, 2-3PM, 3-4PM, 4-5PM, 5:30-6:30PM, 6-7PM, 7-8PM
+      const josephineWeekday = [[540,600],[600,660],[720,780],[840,900],[900,960],[960,1020],[1050,1110],[1080,1140],[1140,1200]];
+
+      // Mariyam: varies by day
+      // All days: 10-11AM (Open), 4-5PM (Free), 5:30-6:30PM (Open)
+      // Mon/Wed/Fri: also 2-3PM (Free)
+      // Mon/Tue/Thu: also 7-8PM (Free) — Wed/Fri = Lingua Lounge
+      const mariyamBase = [[600,660],[960,1020],[1050,1110]];
+      const mariyamMWF  = [...mariyamBase, [840,900]];
+      const mariyamMonThu = [...mariyamBase, [1140,1200]];
+
+      const mariyam = {
+        Monday:    [[600,660],[840,900],[960,1020],[1050,1110],[1140,1200]],
+        Tuesday:   [[600,660],[960,1020],[1050,1110],[1140,1200]],
+        Wednesday: [[600,660],[840,900],[960,1020],[1050,1110]],
+        Thursday:  [[600,660],[960,1020],[1050,1110],[1140,1200]],
+        Friday:    [[600,660],[840,900],[960,1020],[1050,1110]]
+      };
+
+      // Afzal: 11:30AM-12:30PM (Open all days), 8-9PM Tue/Thu/Fri (Assessment Slot)
+      const afzal = {
+        Monday:    [[690,750]],
+        Tuesday:   [[690,750],[1200,1260]],
+        Wednesday: [[690,750]],
+        Thursday:  [[690,750],[1200,1260]],
+        Friday:    [[690,750],[1200,1260]]
+      };
+
+      return {
+        'Josephine': josephineWeekday,
+        'Mariyam':   mariyam[day] || [],
+        'Afzal':     afzal[day]   || []
+      };
     }
-
-    // Parse time string like "9 a.m. -10 a. m." or "3 p.m. - 4 p.m." or "9:30 p.m. - 10:30 p.m."
-    function parseTimeRange(raw) {
-      if (!raw) return null;
-      // Normalise: remove spaces around dots, unify am/pm
-      let s = raw.toString()
-        .replace(/a\.\s*m\./gi, 'am')
-        .replace(/p\.\s*m\./gi, 'pm')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      // Match: optional space, digits, optional :minutes, am/pm, separator, digits, optional :minutes, am/pm
-      const re = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*[-\u2013to]+\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i;
-      const m = s.match(re);
-      if (!m) return null;
-
-      function toMin(h, min, ap) {
-        let hh = parseInt(h);
-        const mm = parseInt(min || '0');
-        if (ap.toLowerCase() === 'pm' && hh !== 12) hh += 12;
-        if (ap.toLowerCase() === 'am' && hh === 12) hh = 0;
-        return hh * 60 + mm;
-      }
-
-      const start = toMin(m[1], m[2], m[3]);
-      const end   = toMin(m[4], m[5], m[6]);
-      if (end > start) return { start, end };
-      return null;
-    }
-
-    // Build trainer name → available ranges for requested day
-    // Sheet structure:
-    //   Row with trainer name in col A (e.g. "Mariyam - (11:30 p.m. - 10:30 p.m)")
-    //   Next row(s): "Time :" header with day names in cols B-G
-    //   Then data rows until blank or next trainer header
-    const trainerRanges = {};
-
-    let currentTrainer = null;
-    let dayColIndex    = -1;
-    let inDataRows     = false;
-
-    for (let i = 0; i < rows.length; i++) {
-      const row  = rows[i];
-      const col0 = (row[0] || '').toString().trim();
-
-      // Check if this row is a trainer name header
-      // It contains a trainer name but is NOT the "Time :" row
-      if (col0 !== 'Time :') {
-        const found = TRAINER_PRIORITY.find(t =>
-          col0.toLowerCase().includes(t.toLowerCase())
-        );
-        if (found) {
-          currentTrainer = found;
-          dayColIndex    = -1;
-          inDataRows     = false;
-          continue;
-        }
-      }
-
-      // Check if this is the "Time :" column header row for the current trainer
-      if (col0 === 'Time :' && currentTrainer) {
-        dayColIndex = -1;
-        inDataRows  = false;
-        for (let c = 1; c < row.length; c++) {
-          if ((row[c] || '').toString().trim() === dayName) {
-            dayColIndex = c;
-            break;
-          }
-        }
-        if (dayColIndex >= 0) inDataRows = true;
-        continue;
-      }
-
-      // Data row
-      if (inDataRows && currentTrainer && dayColIndex >= 0 && col0) {
-        const cellVal = (row[dayColIndex] || '').toString().trim();
-        if (isAvailable(cellVal)) {
-          const range = parseTimeRange(col0);
-          if (range) {
-            if (!trainerRanges[currentTrainer]) trainerRanges[currentTrainer] = [];
-            // Avoid duplicate ranges
-            const exists = trainerRanges[currentTrainer].some(r => r.start === range.start && r.end === range.end);
-            if (!exists) trainerRanges[currentTrainer].push(range);
-          }
-        }
-      }
-    }
-
-    console.log('Day:', dayName, '| Ranges:', JSON.stringify(
-      Object.fromEntries(Object.entries(trainerRanges).map(([k,v]) =>
-        [k, v.map(r => r.start + '-' + r.end)]
-      ))
-    ));
 
     // ── Get existing bookings ────────────────────────────────────────────
     let bookedSlots = [];
@@ -572,9 +509,9 @@ app.get('/api/slots', async (req, res) => {
         range: 'Form Responses 2!A1:Z500',
         valueRenderOption: 'FORMATTED_VALUE'
       });
-      const frows = formResp.data.values || [];
-      if (frows.length > 1) {
-        const headers = frows[0].map(h => h.toString().trim());
+      const rows = formResp.data.values || [];
+      if (rows.length > 1) {
+        const headers = rows[0].map(h => h.toString().trim());
         let dateCol = -1, timeCol = -1, trainerCol = -1;
         for (let ci = 0; ci < headers.length; ci++) {
           const h = headers[ci].toLowerCase().trim();
@@ -585,8 +522,8 @@ app.get('/api/slots', async (req, res) => {
         if (dateCol < 0) dateCol = headers.findIndex(h => h.toLowerCase().includes('date') && !h.toLowerCase().includes('update'));
         if (timeCol < 0) timeCol = headers.findIndex(h => h.toLowerCase().includes('time') && !h.toLowerCase().includes('timestamp'));
 
-        for (let i = 1; i < frows.length; i++) {
-          const row = frows[i];
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
           let normalizedRowDate = '';
           try {
             const rd = (row[dateCol] || '').toString().trim();
@@ -631,30 +568,32 @@ app.get('/api/slots', async (req, res) => {
     } catch(e) { console.log('Bookings read error:', e.message); }
 
     // ── Build 15-minute slot grid ────────────────────────────────────────
-    const SLOT_MIN = 15;
+    const SLOT_DURATION = 15;
 
-    function fmtTime(min) {
-      const h = Math.floor(min/60), m = min%60;
-      const ap = h >= 12 ? 'PM' : 'AM';
-      const h12 = h > 12 ? h-12 : (h===0?12:h);
-      return h12 + ':' + m.toString().padStart(2,'0') + ' ' + ap;
+    function formatTime(minutes) {
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const h12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+      return h12 + ':' + m.toString().padStart(2, '0') + ' ' + ampm;
     }
 
+    const trainerSlots = getSlotsForDay(dayName);
     const result = {};
     for (const trainer of TRAINER_PRIORITY) {
-      const ranges = trainerRanges[trainer] || [];
+      const ranges = trainerSlots[trainer] || [];
       const slots  = [];
-      for (const { start, end } of ranges) {
-        let t = start;
-        while (t + SLOT_MIN <= end) {
+      for (const [rangeStart, rangeEnd] of ranges) {
+        let t = rangeStart;
+        while (t + SLOT_DURATION <= rangeEnd) {
           slots.push({
             startMin:  t,
-            endMin:    t + SLOT_MIN,
-            label:     fmtTime(t) + ' – ' + fmtTime(t + SLOT_MIN),
-            startTime: fmtTime(t),
+            endMin:    t + SLOT_DURATION,
+            label:     formatTime(t) + ' – ' + formatTime(t + SLOT_DURATION),
+            startTime: formatTime(t),
             booked:    bookedSlots.some(b => b.trainer === trainer && b.startMin === t)
           });
-          t += SLOT_MIN;
+          t += SLOT_DURATION;
         }
       }
       if (slots.length > 0) result[trainer] = slots;
