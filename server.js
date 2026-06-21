@@ -794,6 +794,34 @@ app.get('/api/slots', async (req, res) => {
   }
 });
 
+// — GET /api/counsellors — Counsellor names for booking page dropdown ——————
+// Reads "Team" tab, column B ("Counsellor name"), starting row 2, on the
+// Master Sheet (same spreadsheet as Form Responses 2 / Assessments).
+// Add or remove a counsellor by editing that column directly — no code
+// change needed, same self-service pattern as the trainer schedule.
+app.get('/api/counsellors', async (req, res) => {
+  try {
+    const auth   = getAuthClient();
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    const resp = await sheets.spreadsheets.values.get({
+      spreadsheetId: MASTER_SHEET_ID,
+      range: 'Team!B2:B',
+      valueRenderOption: 'FORMATTED_VALUE'
+    });
+    const rows = resp.data.values || [];
+    const counsellors = rows
+      .map(r => (r[0] || '').toString().trim())
+      .filter(Boolean);
+
+    res.json({ counsellors });
+
+  } catch (err) {
+    console.error('counsellors error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('*', (req, res) => {
   if (req.path === '/booking') {
     res.sendFile(path.join(__dirname, 'public', 'booking.html'));
