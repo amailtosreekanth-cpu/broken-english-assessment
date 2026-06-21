@@ -123,7 +123,7 @@ select option{background:#1a1a1a}
 </div>
 
 <script>
-let selectedTrainer = null;
+let chosenTrainer = null;
 let selectedSlot    = null;
 let selectedDate    = null;
 
@@ -157,7 +157,7 @@ async function loadSlots() {
   const date = document.getElementById('assessDate').value;
   if (!date) return;
   selectedDate    = date;
-  selectedTrainer = null;
+  chosenTrainer   = null;
   selectedSlot    = null;
   updateSelectedInfo();
   const section = document.getElementById('slotSection');
@@ -201,11 +201,11 @@ function renderSlots(data) {
 }
 
 function selectSlot(trainer, startMin, label) {
-  if (selectedTrainer && selectedSlot !== null) {
-    const prev = document.getElementById('slot-' + selectedTrainer + '-' + selectedSlot);
+  if (chosenTrainer && selectedSlot !== null) {
+    const prev = document.getElementById('slot-' + chosenTrainer + '-' + selectedSlot);
     if (prev) prev.classList.remove('selected');
   }
-  selectedTrainer = trainer;
+  chosenTrainer = trainer;
   selectedSlot    = startMin;
   const el = document.getElementById('slot-' + trainer + '-' + startMin);
   if (el) el.classList.add('selected');
@@ -215,9 +215,9 @@ function selectSlot(trainer, startMin, label) {
 function updateSelectedInfo() {
   const info = document.getElementById('selectedInfo');
   const btn  = document.getElementById('submitBtn');
-  if (selectedTrainer && selectedSlot !== null) {
+  if (chosenTrainer && selectedSlot !== null) {
     document.getElementById('selectedLabel').textContent   = formatMin(selectedSlot);
-    document.getElementById('selectedTrainer').textContent = selectedTrainer;
+    document.getElementById('selectedTrainer').textContent = chosenTrainer;
     info.style.display = 'block';
     btn.disabled = false;
   } else {
@@ -251,35 +251,39 @@ async function submitBooking() {
   const hours   = Math.floor(selectedSlot/60);
   const minutes = selectedSlot%60;
 
-  const fields = {
-    'entry.1358083565': studentName,
-    'entry.711228167':  contactNo,
-    'entry.88497250':   selectedDate,
-    'entry.1717503294': hours.toString().padStart(2,'0') + ':' + minutes.toString().padStart(2,'0'),
-    'entry.679280233':  counsellor,
-    'entry.679286440':  requirements||'N/A',
-    'entry.1754050611': remarks||'N/A',
-    'entry.317770792':  selectedTrainer
+  const bookingPayload = {
+    studentName,
+    contactNo,
+    date: selectedDate,
+    time: hours.toString().padStart(2,'0') + ':' + minutes.toString().padStart(2,'0'),
+    counsellor,
+    requirements: requirements || 'N/A',
+    remarks: remarks || 'N/A',
+    trainer: chosenTrainer
   };
-  const formBody = new URLSearchParams(fields).toString();
 
   try {
-    await fetch('https://docs.google.com/forms/d/e/1FAIpQLSfZihO1EylQqqiLX6tvNSF6j7knESlCeQ4EkHMNwcd_Kk9iAg/formResponse', {
+    const resp = await fetch('/api/book', {
       method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: formBody
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bookingPayload)
     });
+    const result = await resp.json();
+
+    if (!resp.ok || !result.success) {
+      throw new Error(result.error || 'Booking submission failed.');
+    }
+
     document.getElementById('bookingForm').style.display = 'none';
     document.getElementById('successScreen').style.display = 'block';
     document.getElementById('successMsg').innerHTML =
       '<b style="color:#f0f0f0">' + studentName + '</b> booked at <b style="color:#E8390E">' +
       formatMin(selectedSlot) + '</b> on <b style="color:#E8390E">' + selectedDate + '</b>.<br><br>' +
-      selectedTrainer + ' has been automatically notified by email.<br>You will receive a confirmation email shortly.';
+      chosenTrainer + ' has been automatically notified by email.<br>You will receive a confirmation email shortly.';
   } catch(e) {
     btn.disabled = false;
     btn.textContent = 'Confirm Booking';
-    alert('Submission failed. Please try again.');
+    alert('Submission failed: ' + e.message);
   }
 }
 
@@ -288,7 +292,7 @@ function resetForm() {
   document.getElementById('successScreen').style.display = 'none';
   ['studentName','contactNo','requirements','remarks'].forEach(id => document.getElementById(id).value='');
   document.getElementById('counsellor').value = '';
-  selectedTrainer = selectedSlot = null;
+  chosenTrainer = selectedSlot = null;
   loadSlots();
 }
 </script>
