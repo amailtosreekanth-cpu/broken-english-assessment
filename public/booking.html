@@ -260,6 +260,7 @@ async function submitBooking() {
   formData.append('entry.679280233',  counsellor);
   formData.append('entry.679286440',  requirements||'N/A');
   formData.append('entry.1754050611', remarks||'N/A');
+  formData.append('entry.317770792',  selectedTrainer);
 
   try {
     await fetch('https://docs.google.com/forms/d/e/1FAIpQLSfZihO1EylQqqiLX6tvNSF6j7knESlCeQ4EkHMNwcd_Kk9iAg/formResponse', { method:'POST', mode:'no-cors', body:formData });
