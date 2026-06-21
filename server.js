@@ -822,6 +822,70 @@ app.get('/api/counsellors', async (req, res) => {
   }
 });
 
+// ── POST /api/book — Submit a booking to the Google Form, server-side ────
+// Replaces the old client-side fetch() from booking.html, which submitted
+// directly from the browser to Google's formResponse endpoint using
+// mode:'no-cors'. That approach hid all real errors from the user (the
+// success screen showed regardless of whether Google actually accepted
+// the submission) and Google was intermittently rejecting those browser-
+// originated submissions outright (confirmed via an isolated test page
+// with zero relation to this app — same payload, same rejection).
+//
+// This route does the same submission from the server instead, where we
+// can see Google's real response and return an honest success/failure
+// to the browser. The booking page should POST here instead of fetching
+// the Google Form URL directly.
+app.post('/api/book', async (req, res) => {
+  try {
+    const { studentName, contactNo, date, time, counsellor, requirements, remarks, trainer } = req.body;
+
+    if (!studentName || !contactNo || !date || !time || !counsellor || !trainer) {
+      return res.status(400).json({ error: 'Missing required booking fields.' });
+    }
+
+    const formBody = new URLSearchParams({
+      'entry.1358083565': studentName,
+      'entry.711228167':  contactNo,
+      'entry.88497250':   date,
+      'entry.1717503294': time,
+      'entry.679280233':  counsellor,
+      'entry.679286440':  requirements || 'N/A',
+      'entry.1754050611': remarks || 'N/A',
+      'entry.317770792':  trainer
+    }).toString();
+
+    const googleResp = await fetch(
+      'https://docs.google.com/forms/d/e/1FAIpQLSfZihO1EylQqqiLX6tvNSF6j7knESlCeQ4EkHMNwcd_Kk9iAg/formResponse',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formBody
+      }
+    );
+
+    console.log(`Booking submit for ${studentName}: Google responded with status ${googleResp.status}`);
+
+    // Google Forms returns a 200 with an HTML confirmation page on success,
+    // or various non-200 statuses on rejection. We can finally check this
+    // for real now that we're not in no-cors mode.
+    if (googleResp.ok) {
+      res.json({ success: true });
+    } else {
+      const bodyText = await googleResp.text();
+      console.error(`Booking submit failed for ${studentName}: status ${googleResp.status}`);
+      res.status(502).json({
+        success: false,
+        error: `Google Forms rejected the submission (status ${googleResp.status}).`,
+        googleStatus: googleResp.status
+      });
+    }
+
+  } catch (err) {
+    console.error('Booking submit error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.get('*', (req, res) => {
   if (req.path === '/booking') {
     res.sendFile(path.join(__dirname, 'public', 'booking.html'));
