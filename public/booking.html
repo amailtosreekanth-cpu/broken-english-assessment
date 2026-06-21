@@ -251,18 +251,25 @@ async function submitBooking() {
   const hours   = Math.floor(selectedSlot/60);
   const minutes = selectedSlot%60;
 
-  const formData = new FormData();
-  formData.append('entry.1358083565', studentName);
-  formData.append('entry.711228167',  contactNo);
-  formData.append('entry.88497250',   selectedDate);
-  formData.append('entry.1717503294', hours.toString().padStart(2,'0') + ':' + minutes.toString().padStart(2,'0'));
-  formData.append('entry.679280233',  counsellor);
-  formData.append('entry.679286440',  requirements||'N/A');
-  formData.append('entry.1754050611', remarks||'N/A');
-  formData.append('entry.317770792',  selectedTrainer);
+  const fields = {
+    'entry.1358083565': studentName,
+    'entry.711228167':  contactNo,
+    'entry.88497250':   selectedDate,
+    'entry.1717503294': hours.toString().padStart(2,'0') + ':' + minutes.toString().padStart(2,'0'),
+    'entry.679280233':  counsellor,
+    'entry.679286440':  requirements||'N/A',
+    'entry.1754050611': remarks||'N/A',
+    'entry.317770792':  selectedTrainer
+  };
+  const formBody = new URLSearchParams(fields).toString();
 
   try {
-    await fetch('https://docs.google.com/forms/d/e/1FAIpQLSfZihO1EylQqqiLX6tvNSF6j7knESlCeQ4EkHMNwcd_Kk9iAg/formResponse', { method:'POST', mode:'no-cors', body:formData });
+    await fetch('https://docs.google.com/forms/d/e/1FAIpQLSfZihO1EylQqqiLX6tvNSF6j7knESlCeQ4EkHMNwcd_Kk9iAg/formResponse', {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formBody
+    });
     document.getElementById('bookingForm').style.display = 'none';
     document.getElementById('successScreen').style.display = 'block';
     document.getElementById('successMsg').innerHTML =
