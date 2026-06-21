@@ -453,53 +453,106 @@ app.get('/api/slots', async (req, res) => {
     const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
     const dayName  = dayNames[requestedDate.getDay()];
 
-    const TRAINER_PRIORITY = ['Josephine','Mariyam','Afzal'];
+    const TRAINER_SCHEDULE_ID = '1TfL61kl3VeTk7vYhl4IgTgtpi3yhicdCbUPr9QMydBw';
+    const AVAILABILITY_TAB    = "Assessment trainers' schedule";
 
-    function getSlotsForDay(day) {
-      if (day === 'Saturday') {
-        return {
-          'Josephine': [[540,600],[600,660],[720,780],[780,840],[840,900],[900,960],[960,1020],[1020,1080],[1080,1140]],
-          'Mariyam':   [[540,600],[600,660],[660,720],[720,780],[780,840],[840,900],[900,960],[960,1020],[1020,1080],[1080,1140],[1140,1200],[1200,1260],[1260,1320]],
-          'Afzal':     [[540,600],[600,660],[660,720],[720,780],[780,840],[840,900],[900,960],[960,1020],[1020,1080],[1080,1140],[1140,1200],[1200,1260]]
-        };
-      }
-      if (day === 'Sunday') return { 'Josephine': [], 'Mariyam': [], 'Afzal': [] };
+    // ── Read full availability chart ─────────────────────────────────────
+    // This tab now contains ONLY trainers who take assessments (confirmed
+    // by the founder — non-assessment trainers were moved to a separate
+    // "Other trainers" tab). Because of that, the parser below trusts the
+    // sheet structure itself rather than a hardcoded trainer name list:
+    // ANY block shaped like "<Name> - (start - end)" followed by a
+    // "Time :" row is treated as an active trainer. Add a new trainer's
+    // block to this tab and the booking page picks them up automatically
+    // on the next page load — zero code changes needed.
+    const sheetResp = await sheets.spreadsheets.values.get({
+      spreadsheetId: TRAINER_SCHEDULE_ID,
+      range: `${AVAILABILITY_TAB}!A:G`,
+      valueRenderOption: 'FORMATTED_VALUE'
+    });
+    const rows = sheetResp.data.values || [];
 
-      // Josephine: free same slots all weekdays
-      // 9-10AM, 10-11AM, 12-1PM, 2-3PM, 3-4PM, 4-5PM, 5:30-6:30PM, 6-7PM, 7-8PM
-      const josephineWeekday = [[540,600],[600,660],[720,780],[840,900],[900,960],[960,1020],[1050,1110],[1080,1140],[1140,1200]];
-
-      // Mariyam: varies by day
-      // All days: 10-11AM (Open), 4-5PM (Free), 5:30-6:30PM (Open)
-      // Mon/Wed/Fri: also 2-3PM (Free)
-      // Mon/Tue/Thu: also 7-8PM (Free) — Wed/Fri = Lingua Lounge
-      const mariyamBase = [[600,660],[960,1020],[1050,1110]];
-      const mariyamMWF  = [...mariyamBase, [840,900]];
-      const mariyamMonThu = [...mariyamBase, [1140,1200]];
-
-      const mariyam = {
-        Monday:    [[600,660],[840,900],[960,1020],[1050,1110],[1140,1200]],
-        Tuesday:   [[600,660],[960,1020],[1050,1110],[1140,1200]],
-        Wednesday: [[600,660],[840,900],[960,1020],[1050,1110]],
-        Thursday:  [[600,660],[960,1020],[1050,1110],[1140,1200]],
-        Friday:    [[600,660],[840,900],[960,1020],[1050,1110]]
-      };
-
-      // Afzal: 11:30AM-12:30PM (Open all days), 8-9PM Tue/Thu/Fri (Assessment Slot)
-      const afzal = {
-        Monday:    [[690,750]],
-        Tuesday:   [[690,750],[1200,1260]],
-        Wednesday: [[690,750]],
-        Thursday:  [[690,750],[1200,1260]],
-        Friday:    [[690,750],[1200,1260]]
-      };
-
-      return {
-        'Josephine': josephineWeekday,
-        'Mariyam':   mariyam[day] || [],
-        'Afzal':     afzal[day]   || []
-      };
+    function isAvailable(val) {
+      if (!val) return false;
+      const v = val.toString().toLowerCase().trim();
+      return v === 'free' || v === 'open' || v.startsWith('assessment');
     }
+
+    // Parse "09:00 – 10:00" / "09:00-10:00" / "09:00 - 10:00" (24-hour, en-dash or hyphen)
+    function parseTimeRange24(raw) {
+      if (!raw) return null;
+      const s = raw.toString().trim();
+      const m = s.match(/^(\d{1,2}):(\d{2})\s*[-\u2013\u2014]\s*(\d{1,2}):(\d{2})$/);
+      if (!m) return null;
+      const start = parseInt(m[1]) * 60 + parseInt(m[2]);
+      const end   = parseInt(m[3]) * 60 + parseInt(m[4]);
+      if (end > start) return { start, end };
+      return null;
+    }
+
+    // A trainer header row looks like "Josephine - (09:00 - 23:30)" or
+    // "Afzal - (10:00 - 21:00)" — name, then " - (", then a time range.
+    // Extract just the name. Returns null if the row doesn't match this shape.
+    function extractTrainerName(raw) {
+      if (!raw) return null;
+      const s = raw.toString().trim();
+      const m = s.match(/^([A-Za-z][A-Za-z\s]*?)\s*-\s*\(/);
+      if (m) return m[1].trim();
+      return null;
+    }
+
+    const trainerRanges  = {};
+    const TRAINER_ORDER  = []; // preserves sheet order = priority order
+    let currentTrainer   = null;
+    let dayColIndex       = -1;
+    let inDataRows         = false;
+
+    for (let i = 0; i < rows.length; i++) {
+      const row  = rows[i];
+      const col0 = (row[0] || '').toString().trim();
+
+      // Trainer header row — structural detection, no name list
+      if (col0 !== 'Time :') {
+        const name = extractTrainerName(col0);
+        if (name) {
+          currentTrainer = name;
+          if (!TRAINER_ORDER.includes(name)) TRAINER_ORDER.push(name);
+          dayColIndex = -1;
+          inDataRows  = false;
+          continue;
+        }
+      }
+
+      // "Time :" column-header row — locate the column for the requested day
+      if (col0 === 'Time :' && currentTrainer) {
+        dayColIndex = -1;
+        for (let c = 1; c < row.length; c++) {
+          if ((row[c] || '').toString().trim() === dayName) {
+            dayColIndex = c;
+            break;
+          }
+        }
+        inDataRows = dayColIndex >= 0;
+        continue;
+      }
+
+      // Data row
+      if (inDataRows && currentTrainer && dayColIndex >= 0 && col0) {
+        const range = parseTimeRange24(col0);
+        if (!range) continue; // not a time row — ignore silently
+        const cellVal = (row[dayColIndex] || '').toString().trim();
+        if (isAvailable(cellVal)) {
+          if (!trainerRanges[currentTrainer]) trainerRanges[currentTrainer] = [];
+          const dup = trainerRanges[currentTrainer].some(r => r.start === range.start && r.end === range.end);
+          if (!dup) trainerRanges[currentTrainer].push(range);
+        }
+      }
+    }
+
+    console.log('Day:', dayName, '| Trainers found in sheet:', TRAINER_ORDER.join(', '),
+      '| Ranges:', JSON.stringify(Object.fromEntries(
+        Object.entries(trainerRanges).map(([k,v]) => [k, v.map(r => r.start + '-' + r.end)])
+      )));
 
     // ── Get existing bookings ────────────────────────────────────────────
     let bookedSlots = [];
@@ -509,9 +562,9 @@ app.get('/api/slots', async (req, res) => {
         range: 'Form Responses 2!A1:Z500',
         valueRenderOption: 'FORMATTED_VALUE'
       });
-      const rows = formResp.data.values || [];
-      if (rows.length > 1) {
-        const headers = rows[0].map(h => h.toString().trim());
+      const frows = formResp.data.values || [];
+      if (frows.length > 1) {
+        const headers = frows[0].map(h => h.toString().trim());
         let dateCol = -1, timeCol = -1, trainerCol = -1;
         for (let ci = 0; ci < headers.length; ci++) {
           const h = headers[ci].toLowerCase().trim();
@@ -522,8 +575,8 @@ app.get('/api/slots', async (req, res) => {
         if (dateCol < 0) dateCol = headers.findIndex(h => h.toLowerCase().includes('date') && !h.toLowerCase().includes('update'));
         if (timeCol < 0) timeCol = headers.findIndex(h => h.toLowerCase().includes('time') && !h.toLowerCase().includes('timestamp'));
 
-        for (let i = 1; i < rows.length; i++) {
-          const row = rows[i];
+        for (let i = 1; i < frows.length; i++) {
+          const row = frows[i];
           let normalizedRowDate = '';
           try {
             const rd = (row[dateCol] || '').toString().trim();
@@ -533,9 +586,15 @@ app.get('/api/slots', async (req, res) => {
             } else if (rd.match(/^\d{4}-\d{2}-\d{2}/)) {
               normalizedRowDate = rd.substring(0,10);
             } else if (rd) {
-              const d = new Date(rd);
-              if (!isNaN(d.getTime()) && d.getFullYear() > 1970) {
-                normalizedRowDate = d.getFullYear() + '-' + (d.getMonth()+1).toString().padStart(2,'0') + '-' + d.getDate().toString().padStart(2,'0');
+              // Never round-trip through new Date() here — see fix notes above.
+              const altMdy = rd.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+              if (altMdy) {
+                normalizedRowDate = altMdy[3] + '-' + altMdy[1].padStart(2,'0') + '-' + altMdy[2].padStart(2,'0');
+              } else {
+                const altYmd = rd.match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+                if (altYmd) {
+                  normalizedRowDate = altYmd[1] + '-' + altYmd[2].padStart(2,'0') + '-' + altYmd[3].padStart(2,'0');
+                }
               }
             }
           } catch(e) {}
@@ -559,7 +618,7 @@ app.get('/api/slots', async (req, res) => {
               if (assignedTrainer) {
                 bookedSlots.push({ trainer: assignedTrainer, startMin });
               } else {
-                for (const t of TRAINER_PRIORITY) bookedSlots.push({ trainer: t, startMin });
+                for (const t of TRAINER_ORDER) bookedSlots.push({ trainer: t, startMin });
               }
             }
           }
@@ -578,14 +637,13 @@ app.get('/api/slots', async (req, res) => {
       return h12 + ':' + m.toString().padStart(2, '0') + ' ' + ampm;
     }
 
-    const trainerSlots = getSlotsForDay(dayName);
     const result = {};
-    for (const trainer of TRAINER_PRIORITY) {
-      const ranges = trainerSlots[trainer] || [];
+    for (const trainer of TRAINER_ORDER) {
+      const ranges = trainerRanges[trainer] || [];
       const slots  = [];
-      for (const [rangeStart, rangeEnd] of ranges) {
-        let t = rangeStart;
-        while (t + SLOT_DURATION <= rangeEnd) {
+      for (const { start, end } of ranges) {
+        let t = start;
+        while (t + SLOT_DURATION <= end) {
           slots.push({
             startMin:  t,
             endMin:    t + SLOT_DURATION,
