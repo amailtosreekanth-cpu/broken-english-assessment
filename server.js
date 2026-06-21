@@ -873,6 +873,10 @@ app.post('/api/book', async (req, res) => {
     } else {
       const bodyText = await googleResp.text();
       console.error(`Booking submit failed for ${studentName}: status ${googleResp.status}`);
+      console.error(`Payload sent: ${formBody}`);
+      // Google's error page is large HTML; log only the first 500 chars,
+      // which usually contains the actual error reason near the top.
+      console.error(`Google response body (truncated): ${bodyText.slice(0, 500)}`);
       res.status(502).json({
         success: false,
         error: `Google Forms rejected the submission (status ${googleResp.status}).`,
