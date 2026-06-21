@@ -96,10 +96,7 @@ select option{background:#1a1a1a}
     <div style="margin-bottom:20px">
       <label>Your Name (Counsellor) *</label>
       <select id="counsellor">
-        <option value="">— Select your name —</option>
-        <option value="Ashika">Ashika</option>
-        <option value="Hisana">Hisana</option>
-        <option value="Alisha">Alisha</option>
+        <option value="">— Loading counsellors... —</option>
       </select>
     </div>
 
@@ -133,7 +130,28 @@ let selectedDate    = null;
 const todayStr = new Date().toISOString().split('T')[0];
 document.getElementById('assessDate').setAttribute('min', todayStr);
 document.getElementById('assessDate').value = todayStr;
-window.onload = () => loadSlots();
+window.onload = () => { loadSlots(); loadCounsellors(); };
+
+async function loadCounsellors() {
+  const select = document.getElementById('counsellor');
+  // Fallback list — only used if the live sheet read fails, so the booking
+  // page never breaks entirely. Update the "Team" tab on the Master Sheet
+  // to add/remove counsellors; this fallback does not need to be kept
+  // perfectly in sync, it's a safety net only.
+  const fallback = ['Ashika', 'Alisha', 'Hisana', 'Hiba', 'Diya', 'Sumayya'];
+  let names = fallback;
+  try {
+    const resp = await fetch('/api/counsellors');
+    const data = await resp.json();
+    if (Array.isArray(data.counsellors) && data.counsellors.length > 0) {
+      names = data.counsellors;
+    }
+  } catch (e) {
+    console.error('Could not load counsellors live, using fallback list:', e.message);
+  }
+  select.innerHTML = '<option value="">— Select your name —</option>' +
+    names.map(n => `<option value="${n}">${n}</option>`).join('');
+}
 
 async function loadSlots() {
   const date = document.getElementById('assessDate').value;
@@ -155,8 +173,12 @@ async function loadSlots() {
 
 function renderSlots(data) {
   const section = document.getElementById('slotSection');
-  const trainerOrder  = ['Josephine','Mariyam','Aniyan','Alok','Afzal'];
-  const priorityLabel = ['1st','2nd','3rd','4th','5th'];
+  // Trainer list and order now come entirely from the server's response
+  // (which itself reads the "Assessment trainers' schedule" sheet live) —
+  // no hardcoded names here anymore, so this can never go stale again when
+  // a trainer is added or removed from the sheet.
+  const trainerOrder  = Object.keys(data.slots || {});
+  const ordinals       = ['1st','2nd','3rd','4th','5th','6th','7th','8th'];
   let html = '<div class="legend"><div class="legend-item"><div class="legend-dot legend-free"></div>Available</div><div class="legend-item"><div class="legend-dot legend-taken"></div>Already booked</div><div class="legend-item"><div class="legend-dot legend-selected"></div>Your selection</div></div>';
   html += '<p class="priority-note">Trainer priority order — Josephine receives assessments first.</p>';
   let hasAny = false;
@@ -165,7 +187,8 @@ function renderSlots(data) {
     const slots   = data.slots[trainer] || [];
     if (!slots.length) continue;
     hasAny = true;
-    html += `<div class="trainer-block"><div class="trainer-name">${trainer} <span class="trainer-badge">${priorityLabel[i]} priority</span></div><div class="slots-grid">`;
+    const priorityLabel = ordinals[i] || (i + 1) + 'th';
+    html += `<div class="trainer-block"><div class="trainer-name">${trainer} <span class="trainer-badge">${priorityLabel} priority</span></div><div class="slots-grid">`;
     for (const slot of slots) {
       const cls   = slot.booked ? 'slot booked' : 'slot';
       const click = slot.booked ? '' : `onclick="selectSlot('${trainer}',${slot.startMin},'${slot.label}')"`;
