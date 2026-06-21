@@ -116,10 +116,13 @@ async function getValidAccessToken() {
   return _cachedToken.accessToken;
 }
 
-// googleapis API clients (e.g. google.sheets({version, auth})) accept any
-// auth object implementing getRequestHeaders() — this is the same interface
-// google-auth-library's own clients expose, so nothing downstream needs to
-// change. request() is also provided since some internal paths may call it.
+// googleapis API clients (e.g. google.sheets({version, auth})) route their
+// actual data requests (spreadsheets.values.get, etc.) through the auth
+// object's own request() method — getRequestHeaders() alone isn't enough,
+// that's what the "authClient.request is not a function" error was. This
+// implements request() using Node's native fetch as well, so the broken
+// gaxios/node-fetch transport is bypassed for BOTH token minting and the
+// actual Sheets API calls — not just the token step.
 function getAuthClient() {
   return {
     async getRequestHeaders() {
@@ -129,6 +132,44 @@ function getAuthClient() {
     async getAccessToken() {
       const token = await getValidAccessToken();
       return { token };
+    },
+    // googleapis calls this as request({ url, method, params, data, headers })
+    async request(opts) {
+      const token = await getValidAccessToken();
+      let url = opts.url;
+      if (opts.params) {
+        const qs = new URLSearchParams(
+          Object.entries(opts.params)
+            .filter(([, v]) => v !== undefined && v !== null)
+            .map(([k, v]) => [k, Array.isArray(v) ? v.join(',') : String(v)])
+        ).toString();
+        if (qs) url += (url.includes('?') ? '&' : '?') + qs;
+      }
+
+      const fetchOpts = {
+        method: opts.method || 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(opts.headers || {})
+        }
+      };
+      if (opts.data !== undefined) {
+        fetchOpts.headers['Content-Type'] = 'application/json';
+        fetchOpts.body = JSON.stringify(opts.data);
+      }
+
+      const resp = await fetch(url, fetchOpts);
+      const text = await resp.text();
+      let data;
+      try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
+
+      if (!resp.ok) {
+        const err = new Error(`Request failed with status code ${resp.status}`);
+        err.response = { status: resp.status, data };
+        err.code = resp.status;
+        throw err;
+      }
+      return { data, status: resp.status, headers: resp.headers };
     }
   };
 }
