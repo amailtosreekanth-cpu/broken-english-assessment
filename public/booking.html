@@ -255,8 +255,7 @@ async function submitBooking() {
   formData.append('entry.1358083565', studentName);
   formData.append('entry.711228167',  contactNo);
   formData.append('entry.88497250',   selectedDate);
-  formData.append('entry.1717503294_hour',   hours.toString());
-  formData.append('entry.1717503294_minute', minutes.toString().padStart(2,'0'));
+  formData.append('entry.1717503294', hours.toString().padStart(2,'0') + ':' + minutes.toString().padStart(2,'0'));
   formData.append('entry.679280233',  counsellor);
   formData.append('entry.679286440',  requirements||'N/A');
   formData.append('entry.1754050611', remarks||'N/A');
