@@ -688,7 +688,7 @@ app.get('/api/slots', async (req, res) => {
     try {
       const formResp = await sheets.spreadsheets.values.get({
         spreadsheetId: MASTER_SHEET_ID,
-        range: 'Form Responses 2!A1:Z500',
+        range: 'Form Responses 2!A:Z',
         valueRenderOption: 'FORMATTED_VALUE'
       });
       const frows = formResp.data.values || [];
